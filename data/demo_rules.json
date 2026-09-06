@@ -1,0 +1,32 @@
+{
+  "version": "1",
+  "rules": [
+    {
+      "rule_id": "R-DISC-001",
+      "name": "EU allergy disclaimer present",
+      "description": "Copy in EU territories must include the allergy advisory marker.",
+      "node_kinds": ["copy"],
+      "territories": ["de", "fr", "es", "it", "nl", "be", "se", "pl", "at", "pt", "gr", "cz", "hu", "ro", "ie", "dk", "fi"],
+      "predicate": {"field": "disclaimer", "op": "not_contains", "value": "ADVISORY"},
+      "severity": "blocking"
+    },
+    {
+      "rule_id": "R-RTL-002",
+      "name": "RTL locales carry RTL flag",
+      "description": "Copy recipes for Arabic/Hebrew locales must set rtl=true.",
+      "node_kinds": ["copy"],
+      "territories": ["ae", "sa", "eg", "il"],
+      "predicate": {"field": "rtl", "op": "not_exists"},
+      "severity": "warning"
+    },
+    {
+      "rule_id": "R-RUNTIME-003",
+      "name": "Package runtime within slot",
+      "description": "Packaged spots must not exceed the 15-second media slot.",
+      "node_kinds": ["package"],
+      "territories": [],
+      "predicate": {"field": "runtime_seconds", "op": "max_len", "value": 15},
+      "severity": "warning"
+    }
+  ]
+}

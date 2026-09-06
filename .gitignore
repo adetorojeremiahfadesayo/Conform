@@ -1,0 +1,26 @@
+# Byte-compiled / caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Virtualenv
+.venv/
+venv/
+
+# Secrets — NEVER commit
+.env
+*.key
+service-account*.json
+
+# Frontend & backups
+**/node_modules/
+web_legacy_backup/
+web/dist/
+.playwright-cli/
+Kimi_Agent_Interactive\ Film\ Agent\ UI/
+*Kimi*
+
+# Generated artifacts
+output/
+*.ifc
