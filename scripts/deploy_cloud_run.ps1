@@ -31,6 +31,33 @@ Write-Host "============================================================" -Foreg
 Write-Host "--> Building container image via Google Cloud Build..." -ForegroundColor Yellow
 gcloud builds submit --tag $Image .
 
+# Load .env if present
+if (Test-Path ".env") {
+    Get-Content ".env" | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $parts = $line.Split("=", 2)
+            $name = $parts[0].Trim()
+            $val = $parts[1].Trim()
+            if (-not [System.Environment]::GetEnvironmentVariable($name)) {
+                [System.Environment]::SetEnvironmentVariable($name, $val)
+            }
+        }
+    }
+}
+
+$EnvVarsList = @(
+    "GOOGLE_CLOUD_PROJECT=$ProjectId",
+    "GOOGLE_CLOUD_REGION=$Region",
+    "BUILD_BUDGET_USD=10.00"
+)
+if ($env:CLICKHOUSE_HOST) { $EnvVarsList += "CLICKHOUSE_HOST=$($env:CLICKHOUSE_HOST)" }
+if ($env:CLICKHOUSE_PORT) { $EnvVarsList += "CLICKHOUSE_PORT=$($env:CLICKHOUSE_PORT)" }
+if ($env:CLICKHOUSE_USER) { $EnvVarsList += "CLICKHOUSE_USER=$($env:CLICKHOUSE_USER)" }
+if ($env:CLICKHOUSE_PASSWORD) { $EnvVarsList += "CLICKHOUSE_PASSWORD=$($env:CLICKHOUSE_PASSWORD)" }
+if ($env:CLICKHOUSE_DATABASE) { $EnvVarsList += "CLICKHOUSE_DATABASE=$($env:CLICKHOUSE_DATABASE)" }
+$EnvVarsString = $EnvVarsList -join ","
+
 # 2. Deploy to Cloud Run
 Write-Host "--> Deploying service to Cloud Run..." -ForegroundColor Yellow
 gcloud run deploy $ServiceName `
@@ -42,7 +69,7 @@ gcloud run deploy $ServiceName `
   --memory 2Gi `
   --cpu 2 `
   --timeout 300 `
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=$ProjectId,GOOGLE_CLOUD_REGION=$Region,BUILD_BUDGET_USD=10.00"
+  --set-env-vars "$EnvVarsString"
 
 # 3. Get the live URL
 $ServiceUrl = (gcloud run services describe $ServiceName --platform managed --region $Region --format 'value(status.url)').Trim()
