@@ -21,7 +21,7 @@ const GUIDE: Record<number, { title: string; body: string }> = {
   },
   6: {
     title: "Verify & analyse",
-    body: "The release is sealed with a SHA-256 manifest. Re-hash every artifact to prove byte-exact integrity — or corrupt one byte and watch verification catch it instantly.",
+    body: "The release is sealed with a SHA-256 manifest. Re-hash every artifact to prove byte-exact integrity across all campaign variants.",
   },
 };
 

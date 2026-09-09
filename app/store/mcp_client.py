@@ -96,7 +96,7 @@ class McpClickHouseReader:
         )
         try:
             try:
-                with urllib.request.urlopen(req, timeout=30) as resp:
+                with urllib.request.urlopen(req, timeout=65) as resp:
                     body = resp.read().decode()
             except urllib.error.HTTPError as exc:
                 if exc.code not in (400, 404):
@@ -108,7 +108,7 @@ class McpClickHouseReader:
                 headers.pop("Mcp-Session-Id", None)
                 with urllib.request.urlopen(urllib.request.Request(
                     f"{self._url}/mcp", data=json.dumps(init).encode(), headers=headers,
-                ), timeout=30) as resp:
+                ), timeout=65) as resp:
                     self._session_id = resp.headers.get("Mcp-Session-Id")
                     resp.read()
                 if self._session_id:
@@ -116,11 +116,11 @@ class McpClickHouseReader:
                 with urllib.request.urlopen(urllib.request.Request(
                     f"{self._url}/mcp", headers=headers,
                     data=json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(),
-                ), timeout=30) as resp:
+                ), timeout=65) as resp:
                     resp.read()
                 with urllib.request.urlopen(urllib.request.Request(
                     f"{self._url}/mcp", data=payload, headers=headers,
-                ), timeout=30) as resp:
+                ), timeout=65) as resp:
                     body = resp.read().decode()
         except Exception as exc:
             self.mode = "error"
@@ -147,7 +147,15 @@ def _parse_mcp_result(body: str) -> list[dict]:
     if "error" in envelope:
         raise ConformError("MCP_ERROR", str(envelope["error"])[:300])
     if envelope.get("result", {}).get("isError"):
-        raise ConformError("MCP_ERROR", str(envelope["result"].get("content", []))[:300])
+        content = envelope["result"].get("content", [])
+        err_msg = ""
+        for item in content:
+            if isinstance(item, dict) and "text" in item:
+                err_msg = item["text"]
+                break
+        if not err_msg:
+            err_msg = str(content)
+        raise ConformError("MCP_ERROR", err_msg[:300])
     content = envelope.get("result", {}).get("content", [])
     for item in content:
         if item.get("type") == "text":

@@ -38,6 +38,7 @@ def main() -> None:
         "CLICKHOUSE_USER": "conform_judge",
         "CLICKHOUSE_DATABASE": config.clickhouse_database, "ARTIFACT_BUCKET": bucket,
         "BUILD_BUDGET_USD": config.build_budget_usd, "JUDGE_MODE": "true",
+        "CLICKHOUSE_MCP_QUERY_TIMEOUT": "60",
     }
     with tempfile.TemporaryDirectory(prefix="conform-deploy-") as tmp:
         values = Path(tmp) / "runtime.json"

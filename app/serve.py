@@ -17,6 +17,7 @@ def main() -> None:
     os.environ["CLICKHOUSE_MCP_SERVER_TRANSPORT"] = "http"
     os.environ["CLICKHOUSE_ALLOW_WRITE_ACCESS"] = "false"
     os.environ["CLICKHOUSE_MCP_AUTH_DISABLED"] = "false"
+    os.environ["CLICKHOUSE_MCP_QUERY_TIMEOUT"] = "60"
     sidecar = subprocess.Popen([sys.executable, "-m", "mcp_clickhouse.main"])
     try:
         import uvicorn

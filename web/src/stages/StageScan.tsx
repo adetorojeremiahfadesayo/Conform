@@ -171,8 +171,9 @@ export default function StageScan({
               </div>
             ))}
             {requestState === "loading" && (
-              <div className="rounded-xl p-4" style={{ background: "var(--paper-warm)", color: "var(--ink-soft)" }}>
-                Request in progress. No operational result will be displayed until the API succeeds.
+              <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: "var(--paper-warm)", color: "var(--ink)" }}>
+                <span className="dot dot-pulse" style={{ background: "var(--coral)" }} />
+                <span className="font-medium text-[13.5px]">Analyzing dependencies and calculating blast radius...</span>
               </div>
             )}
             {requestState === "error" && (
