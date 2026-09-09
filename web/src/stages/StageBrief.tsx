@@ -128,9 +128,6 @@ export default function StageBrief({
             onFocus={(e) => (e.currentTarget.style.borderColor = "var(--charcoal)")}
             onBlur={(e) => (e.currentTarget.style.borderColor = "var(--hairline)")}
           />
-          {judgeMode && <p className="text-[12px] mt-2" style={{ color: "var(--ink-soft)" }}>
-            Public Judge Mode uses this prepared cached scenario. Custom changes are intentionally unavailable.
-          </p>}
         </div>
       </section>
 
