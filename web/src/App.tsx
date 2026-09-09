@@ -36,7 +36,6 @@ export default function App() {
   const [isApproving, setIsApproving] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [adkOpen, setAdkOpen] = useState(false);
-  const [faultMode, setFaultMode] = useState<string>("off");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const judgeMode = systemStatus?.judge_mode === "locked_cached_demo";
 
@@ -45,7 +44,6 @@ export default function App() {
     api.status()
       .then((st) => {
         setSystemStatus(st);
-        if (st.fault_injection) setFaultMode(st.fault_injection);
       })
       .catch((err) => console.warn("Status fetch note:", err));
   }, []);
@@ -151,16 +149,6 @@ export default function App() {
       api.reject(changeId, "producer (simulated)").catch(() => undefined);
     }
     go(1);
-  };
-
-  const toggleFault = async () => {
-    const nextMode = faultMode === "off" ? "timeout" : "off";
-    setFaultMode(nextMode);
-    try {
-      await api.setFaultInjection(nextMode);
-    } catch (err) {
-      console.warn("Fault injection note:", err);
-    }
   };
 
   return (
