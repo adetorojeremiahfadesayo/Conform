@@ -18,7 +18,7 @@ A smart build compiler and Google ADK orchestrator for AI video advertising slat
 [![Linter](https://img.shields.io/badge/Code%20Style-Ruff%20Clean-000000.svg)](https://github.com/astral-sh/ruff)
 [![Deployment](https://img.shields.io/badge/Deploy-Google%20Cloud%20Run-EA4335.svg)](https://cloud.google.com/run)
 
-**[🌐 Open Hosted Live Demo](https://conform-tiwoc77ijq-ew.a.run.app)** · **[🎥 Watch Demo Video](docs/demo_recording.mp4)** · **[🏆 Devpost Submission](docs/DEVPOST_SUBMISSION.md)** · **[📜 Provenance & Clean IP](PROVENANCE.md)**
+**[🌐LINK](https://conform-tiwoc77ijq-ew.a.run.app)** · **[🌐YOUTUBE DEMO](https://youtu.be/J6aWYtqq61U)**
 
 </div>
 
@@ -29,40 +29,9 @@ A smart build compiler and Google ADK orchestrator for AI video advertising slat
 > **If you edit one typo on page 42 of a printed book, you don't pay an author to rewrite the entire book from chapter one. You just reprint page 42.**
 
 Current AI video pipelines don't know how to do that. If you create a commercial adapted for 40 countries, and a European regulator asks for a longer legal disclaimer in Germany and France, today's AI video tools **regenerate every single video clip, voiceover, and image from scratch**. That burns hundreds of dollars on expensive video AI (like Google Veo 3.1) and takes an hour.
+**CONFORM is A  smart compiler for generative video.** Like a programmer's build system (like `make` or `webpack`), it traces the exact recipe of your video. It leaves the expensive video footage and music completely untouched, rebuilds *only* the legal text that changed, shows you the price tag first, and waits for your approval before spending a single penny.
 
-**CONFORM is the first smart compiler for generative video.** Like a programmer's build system (like `make` or `webpack`), it traces the exact recipe of your video. It leaves the expensive video footage and music completely untouched, rebuilds *only* the legal text that changed, shows you the price tag first, and waits for your approval before spending a single penny.
 
----
-
-## Plain English Glossary: Decoding the Jargon
-
-You don't need a PhD in compiler theory to understand CONFORM. Here is what the technical terms mean in everyday language:
-
-| Technical Term | What It Means in Plain English | Real-World Metaphor |
-|---|---|---|
-| **"Blast Radius"** | **The Splash Zone / Ripple Effect.** When you change a word or rule, which specific files are affected, and which ones are untouched? | If you spill coffee on your desk, the blast radius is the documents that got wet — not the books on the high shelf. |
-| **"Dirty" Asset** | **Needs Updating.** An asset whose prompt, rule, or upstream ingredients changed. This is the only thing we re-render. | A draft page with red ink corrections that must be re-typed. |
-| **"Clean" Asset** | **Already Done / Free to Reuse.** An asset whose ingredients haven't changed. Reused instantly at **$0.00 cost** and 0 seconds. | A finished page that doesn't have any corrections. Keep it as-is. |
-| **"Fingerprint" (Canonical Hash)** | **Digital ID Card / Barcode.** A unique 64-character code calculated from the exact prompt, settings, and seed. If the prompt hasn't changed, the ID is identical, so CONFORM grabs the existing video from the shelf instead of paying to generate it again. | A grocery barcode. If two cans of soup have the exact same ingredients, they get the exact same barcode. |
-| **"DAG" (Directed Acyclic Graph)** | **The Production Recipe / Flowchart.** The step-by-step flowchart connecting your script $\rightarrow$ storyboard $\rightarrow$ video clips $\rightarrow$ voiceover $\rightarrow$ final packaged commercial. | A baking recipe: flour + sugar $\rightarrow$ batter $\rightarrow$ oven $\rightarrow$ cake $\rightarrow$ frosting. |
-| **"Human Approval Gate"** | **The Credit-Card Safeguard.** The AI is physically locked. It cannot run video generation models or incur costs until a human reviews the quote and clicks "Approve". | An online shopping checkout cart where you must click "Confirm Payment" before your card is charged. |
-| **"Byte-Exact Verification"** | **The Digital Tamper Seal.** Cryptographic proof that the video delivered to an ad network matches what was approved, down to the exact 1 and 0 bits. | The unbroken plastic seal on a medicine bottle proving nobody tampered with the contents. |
-| **"ClickHouse Telemetry"** | **The Real-Time Production Accountant.** A lightning-fast analytical flight recorder tracking every millisecond, penny, and token spent across 40 countries, queryable in plain English. | A flight data black box that records every dial and engine metric during flight. |
-
----
-
-## Quick Links
-
-| Resource | Description | Location |
-|---|---|---|
-| **Live Hosted Demo** | Interactive Cloud Run app running in **Public Judge Mode** with cached media & MCP reads | [conform-tiwoc77ijq-ew.a.run.app](https://conform-tiwoc77ijq-ew.a.run.app) |
-| **Demo Video** | 3-minute technical walkthrough demonstrating blast radius, approval gate, and byte verification | [docs/demo_recording.mp4](docs/demo_recording.mp4) |
-| **Devpost Submission** | Full submission package, inspiration, challenges, and track criteria answers | [docs/DEVPOST_SUBMISSION.md](docs/DEVPOST_SUBMISSION.md) |
-| **Clean IP Provenance** | Detailed provenance log verifying new contest-period work, Google-only AI, and zero prior code | [PROVENANCE.md](PROVENANCE.md) |
-| **Architectural Invariants** | Core laws, LLM/deterministic boundary rules, and state machine invariants | [AGENTS.md](AGENTS.md) |
-| **Product Specification** | Complete functional and non-functional engineering requirements | [docs/PRD.md](docs/PRD.md) |
-
----
 
 ## Why We Built It — The $10,000 Text Edit Problem
 
@@ -118,32 +87,26 @@ A new European Union regulation lands:
 
 ## Why It Stands Out — The 6 Architectural Laws
 
-### 1. The LLM / Deterministic Boundary
-> **The Golden Rule:** The AI (Gemini) is only allowed to *interpret* human text into structured contracts and *explain* data. It is **never** allowed to calculate numbers.
-
-- An LLM **never** invents a hash, calculates a cost, determines what to rebuild, or decides if a test passed. Those are handled by 100% deterministic Python and SQL.
-- This rule is enforced by an automated code-inspection test (`tests/test_boundary.py`) that physically fails if any core calculation file tries to import an AI model.
-
-### 2. Cache Determinism, Not Model Determinism
+### 1. Cache Determinism, Not Model Determinism
 AI models never produce the exact same pixels twice. CONFORM solves this with **Cache Determinism**:
 - Every asset receives a digital ID card (hash) based on its exact prompt, settings, and recipe:
   $$\text{Fingerprint} = \text{SHA-256}(\text{Canonical}(\text{Inputs} \mathbin{\Vert} \text{Recipe}))$$
 - If the inputs haven't changed, the ID is identical. CONFORM grabs the existing video bytes from storage instead of calling the AI model again.
 
-### 3. Pre-Spend Safeguard (No Approval = No Bill)
+###2. Pre-Spend Safeguard (No Approval = No Bill)
 - The build engine strictly **refuses to run** (`HTTP 409 NOT_APPROVED`) if called before human approval.
 - The approval locks the exact state of the project. If someone edits a prompt after you approved the bill, the build refuses to run (`STALE_APPROVAL`) until re-approved.
 
-### 4. ClickHouse Telemetry & Official MCP Sidecar (Partner Track)
+### 3. ClickHouse Telemetry & Official MCP Sidecar (Partner Track)
 - **Ultra-Fast Ingestion (Write Path):** Every attempt, cache hit, retry, and latency metric streams into ClickHouse Cloud using the high-throughput `clickhouse-connect` driver.
 - **Natural Language Analyst (Read Path):** The built-in AI Analyst answers questions like *"How much did we spend on video today?"* by communicating exclusively through the official Python **`mcp-clickhouse`** MCP server over JSON-RPC 2.0.
 - **Read-Only Safety Guard:** All generated SQL is inspected by an internal parser to ensure it only performs safe, read-only `SELECT` queries with strict row limits.
 
-### 5. Google ADK Agent with Pause & Resume (`google-adk==2.8.0`)
+### 4. Google ADK Agent with Pause & Resume (`google-adk==2.8.0`)
 - Built using the official Google Agent Development Kit (`google.adk`).
 - The agent autonomously interprets briefs, calculates blast radius, and prepares estimates, but **pauses** before building. It issues a resumption token that waits for human approval before resuming execution.
 
-### 6. Cryptographic Proof & Live Tamper Studio
+### 5. Cryptographic Proof & Live Tamper Studio
 - A release is an unchangeable manifest of expected file hashes.
 - CONFORM downloads the actual generated files cold from storage and re-hashes every byte.
 - Includes a live **Tamper Demonstration Studio**: corrupting just 1 byte of data in storage causes release verification to immediately fail bright red (`MISMATCH / TAMPERED`), giving clients proof of delivery integrity.
@@ -281,7 +244,7 @@ Every asset in the campaign is built by a specialized Google foundation model or
 
 ---
 
-## Deep Dive: How the Generative AI Stack Powers CONFORM
+#How the Generative AI Stack Powers CONFORM
 
 ### 1. Google Veo 3.1 (`veo-3.1-fast-generate-001`) — The High-Cost Video Engine
 - **Why it matters:** Generating video with AI is computationally heavy. A 6-second cinematic video clip takes 30–60 seconds of GPU time and costs substantially more than text or images.
@@ -305,7 +268,7 @@ CONFORM uses the right model for the right job:
 
 ---
 
-## Deep Dive: ClickHouse — The Real-Time Financial Accountant
+ ClickHouse, The Real-Time Financial Accountant
 
 Why did CONFORM choose ClickHouse for the **ClickHouse Partner Track**?
 
@@ -455,22 +418,10 @@ pytest tests/test_mcp_client.py
 ruff check .
 ```
 
----
-
-## Public Judge Mode Deployment
-
-The live hosted URL (`https://conform-tiwoc77ijq-ew.a.run.app`) runs in **Public Judge Mode**:
-- **Zero-Spend Protection:** Runs under a dedicated `conform-judge` service account with storage object-viewer access only and **zero Vertex AI permissions**. It cannot incur unexpected cloud spend.
-- **Cache Preflight Guarantee:** Rebuilds are preflighted against cached media assets; uncached misses are safely refused (`503 JUDGE_CACHE_MISS`).
-- **Abuse Prevention:** In-memory IP rate limiting, 8KB request payload caps, same-origin CORS, CSP headers, and strict endpoint allowlisting.
-- **Full Verification Preserved:** Approval workflows, blast radius previews, ClickHouse MCP historical analytics, and in-memory byte tampering remain 100% interactive.
-
----
 
 ## Safety Rails & Disclaimers
 
 > [!IMPORTANT]
-> **Cache Determinism Notice:** Generative AI models are fundamentally non-deterministic. CONFORM does not claim model determinism. All determinism guarantees refer to **cache determinism**: identical inputs + identical recipe reuse content-addressed artifacts byte-for-byte.
 
 > [!NOTE]
 > **Compliance Rule Notice:** The rule evaluation engine implements **demo project rules only**. It does not constitute professional legal, regulatory, or advertising standards review.
