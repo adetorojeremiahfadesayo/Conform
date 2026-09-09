@@ -22,6 +22,9 @@ class EventWriter(Protocol):
     def write_run(self, run: NodeRunRecord) -> None: ...
     def write_provider_call(self, call: ProviderCallRecord) -> None: ...
     def write_artifact(self, artifact: ArtifactRecord) -> None: ...
+    def write_runs(self, runs: list[NodeRunRecord]) -> None: ...
+    def write_provider_calls(self, calls: list[ProviderCallRecord]) -> None: ...
+    def write_artifacts(self, artifacts: list[ArtifactRecord]) -> None: ...
     def query(self, sql: str, params: dict | None = None) -> list[dict]: ...
 
 
@@ -116,6 +119,10 @@ class SQLiteWriter:
         d["error_class"] = run.error_class.value
         self._insert("node_runs", d)
 
+    def write_runs(self, runs: list[NodeRunRecord]) -> None:
+        for run in runs:
+            self.write_run(run)
+
     def write_provider_call(self, call: ProviderCallRecord) -> None:
         d = call.model_dump(mode="json")
         d["cost_usd"] = str(call.cost_usd)
@@ -123,10 +130,18 @@ class SQLiteWriter:
         d["is_seeded"] = int(call.is_seeded)
         self._insert("provider_calls", d)
 
+    def write_provider_calls(self, calls: list[ProviderCallRecord]) -> None:
+        for call in calls:
+            self.write_provider_call(call)
+
     def write_artifact(self, artifact: ArtifactRecord) -> None:
         d = artifact.model_dump(mode="json")
         d["verify_ok"] = None if artifact.verify_ok is None else int(artifact.verify_ok)
         self._insert("artifacts", d)
+
+    def write_artifacts(self, artifacts: list[ArtifactRecord]) -> None:
+        for artifact in artifacts:
+            self.write_artifact(artifact)
 
     def query(self, sql: str, params: dict | None = None) -> list[dict]:
         # Short-lived read connection; safe on any thread, non-blocking under WAL.
@@ -181,10 +196,9 @@ class ClickHouseWriter:
         rows = []
         cols = None
         for run in runs:
-            d = run.model_dump(mode="json")
+            d = run.model_dump(mode="python")
             d["node_kind"] = run.node_kind.value
             d["error_class"] = run.error_class.value
-            d["cost_usd"] = str(run.cost_usd)
             if cols is None:
                 cols = list(d)
             rows.append(list(d.values()))
@@ -199,23 +213,58 @@ class ClickHouseWriter:
         rows = []
         cols = None
         for call in calls:
-            d = call.model_dump(mode="json")
-            d["cost_usd"] = str(call.cost_usd)
+            d = call.model_dump(mode="python")
             if cols is None:
                 cols = list(d)
             rows.append(list(d.values()))
         self._client.insert("provider_calls", rows, column_names=cols)
 
     def write_artifact(self, artifact: ArtifactRecord) -> None:
-        d = artifact.model_dump(mode="json")
-        self._client.insert("artifacts", [list(d.values())], column_names=list(d))
+        self.write_artifacts([artifact])
+
+    def write_artifacts(self, artifacts: list[ArtifactRecord]) -> None:
+        if not artifacts:
+            return
+        rows = []
+        cols = None
+        for artifact in artifacts:
+            d = artifact.model_dump(mode="python")
+            if cols is None:
+                cols = list(d)
+            rows.append(list(d.values()))
+        self._client.insert("artifacts", rows, column_names=cols)
 
     def query(self, sql: str, params: dict | None = None) -> list[dict]:
         result = self._client.query(sql, parameters=params or {})
         return [dict(zip(result.column_names, row)) for row in result.result_rows]
 
 
+class JudgeWriter:
+    """Deliberately write-disabled event store for the public cached demo.
+
+    Judge Mode reads historical data exclusively through the MCP reader. It
+    never initialises schemas, inserts telemetry, or holds a write client.
+    """
+
+    mode = "disabled_in_judge_mode"
+
+    def _blocked(self, *_args, **_kwargs) -> None:
+        return None
+
+    write_run = _blocked
+    write_provider_call = _blocked
+    write_artifact = _blocked
+    write_runs = _blocked
+    write_provider_calls = _blocked
+    write_artifacts = _blocked
+
+    def query(self, sql: str, params: dict | None = None) -> list[dict]:
+        raise RuntimeError("Judge Mode does not expose a direct database query path")
+
+
 def build_writer(config: Config) -> EventWriter:
+    if config.judge_mode:
+        return JudgeWriter()
     if config.clickhouse_live:
         return ClickHouseWriter(config)
     return SQLiteWriter()

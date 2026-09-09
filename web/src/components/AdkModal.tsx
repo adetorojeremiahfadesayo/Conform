@@ -42,8 +42,7 @@ export default function AdkModal({ isOpen, onClose, onSyncToMainView }: AdkModal
     setBusy(true);
     setError(null);
     try {
-      // auto_approve = false enforces Invariant 4: No generative calls before approval
-      const res = await api.adkExecute(activeGoal, false);
+      const res = await api.adkExecute(activeGoal);
       setResult(res);
     } catch (e) {
       setResult(null);

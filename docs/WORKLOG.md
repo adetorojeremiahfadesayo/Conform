@@ -283,3 +283,47 @@ Completed all four blocking workstreams from `docs/IMPLEMENTATION_PLAN.md`:
    - Linter clean with 0 issues (`ruff check .`).
    - Frontend production assets bundled cleanly to `web/dist` (`npm run build`).
    - Live smoke test verified on `http://localhost:8080` with Vertex live mode.
+
+## 2026-09-07 — Demo reliability hardening
+
+- Added cache-first replay for curated ADK presets. Only validated interpretations previously produced by
+  `google_adk_live` are stored; offline fallback interpretations are never promoted into this cache.
+- A replay creates a fresh change and recomputes the deterministic blast radius and estimate, so approval,
+  graph-hash, budget, build, and verification rules remain active.
+- Isolated Vertex and fallback artifact namespaces to prevent local stub bytes from satisfying a live build.
+- Batched ClickHouse writes with native Python values and made telemetry reporting non-fatal after a release
+  has already completed. Reporting failures remain explicit in the typed build result and audit log.
+- Removed the terminal-like rebuild panel and internal execution-mode text from the primary demo journey while
+  preserving the existing frontend design.
+- Verification: 121 backend tests pass, Ruff passes, and the frontend production bundle succeeds.
+- Set cached scan and build presentation stages to a consistent four-second minimum. The timer runs in
+  parallel with the real backend request and never displays success before the API succeeds; uncached live
+  provider work may truthfully take longer than four seconds.
+
+## 2026-09-08 — Judge workflow repairs and cloud preparation
+
+- Applied validated edits/rules to an isolated graph before building; changed fingerprints now propagate
+  into downstream packages. Added a regression test for base-graph immutability and descendant invalidation.
+- Loaded cached parent bytes for incremental packaging and linked provider-call IDs to their build/run.
+- Strict live packaging now produces playable H.264 packages with generated captions, or raises an error.
+  Offline package text cannot silently substitute for live media. Bumped the packaging recipe version.
+- Generated three real six-second Veo clips and six localized packages. All nine passed ffprobe duration
+  checks; the 12-artifact localized release passed byte verification and recorded ClickHouse telemetry.
+- Official authenticated mcp-clickhouse sidecar returned 94 historical rows through the app's reader.
+- Created a dedicated private CONFORM GCS bucket and runtime service account; uploaded usable cache objects.
+- Added GCS instance warm-up while preserving fresh downloads for release verification.
+- Isolated tamper copies so public demonstrations cannot corrupt the shared source cache.
+- Added release video previews in the existing frontend. Cloud deployment and browser verification in progress.
+
+## 2026-09-09 — Public Judge Mode hardening
+
+- Added explicit Judge Mode: only the cached EU R-DISC-004 scenario can execute; custom changes, free-form ADK
+  goals, direct SQL, fault toggles, cache-miss generation, and other operational API routes are blocked.
+- The public build path preflights all required artifacts and refuses any cache miss before a provider can run.
+  In Judge Mode build telemetry writes and schema initialisation are disabled; history reads continue through
+  the authenticated official MCP sidecar.
+- The tamper demonstration now uses a process-local byte overlay, so it demonstrates a real SHA-256 mismatch
+  without mutating or adding objects in GCS.
+- Added request size limits, per-instance rate limiting, same-origin-only CORS, and browser security headers.
+- Created `conform-judge` runtime identity with `Storage Object Viewer` on the private artifact bucket only;
+  it has no project role and no Vertex permission.

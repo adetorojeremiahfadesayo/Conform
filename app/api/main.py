@@ -7,15 +7,18 @@ ConformError and map to a consistent ApiError envelope with the right status.
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.agents.coordinator import Coordinator
 from app.api.deps import get_coordinator
+from app.config import load_config
 from app.domain.schemas import AdkExecuteRequest, AdkResumeRequest, ConformError
 
 _STATUS_BY_CODE = {
@@ -36,6 +39,10 @@ _STATUS_BY_CODE = {
     "ANALYTICS_FAILED": 500,
     "TAMPER_FAILED": 500,
     "NO_ARTIFACTS": 400,
+    "ADK_LIVE_FAILED": 502,
+    "ADK_NO_CHANGE": 502,
+    "JUDGE_ACTION_BLOCKED": 403,
+    "JUDGE_CACHE_MISS": 503,
 }
 
 
@@ -68,13 +75,58 @@ class FaultInjectionApiRequest(BaseModel):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="CONFORM", version="0.1.0")
+    config = load_config()
+    requests: dict[str, list[float]] = {}
+    request_lock = Lock()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        # The browser bundle and API share one Cloud Run origin. No cross-site
+        # caller needs credentials or CORS access in the public judge surface.
+        allow_origins=[],
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
     )
+
+    @app.middleware("http")
+    async def judge_guard(request: Request, call_next):
+        """Constrain the public URL to a cached, no-spend judge journey."""
+        try:
+            body_length = int(request.headers.get("content-length", "0"))
+        except ValueError:
+            return JSONResponse(status_code=400, content={"code": "INVALID_CONTENT_LENGTH", "message": "Invalid request"})
+        if body_length > 8_192:
+            return JSONResponse(status_code=413, content={"code": "REQUEST_TOO_LARGE", "message": "Request too large"})
+        if config.judge_mode and request.url.path.startswith("/api/"):
+            # In-memory per-instance abuse control. Cloud Run is held to one
+            # instance and one concurrent request for this prepared demo.
+            client = request.client.host if request.client else "unknown"
+            now = monotonic()
+            with request_lock:
+                history = [item for item in requests.get(client, []) if now - item < 60]
+                if len(history) >= 60:
+                    return JSONResponse(status_code=429, content={"code": "RATE_LIMITED", "message": "Try again shortly."})
+                history.append(now)
+                requests[client] = history
+            allowed = (
+                ("GET", "/api/system/status"), ("GET", "/api/campaigns"),
+                ("GET", "/api/presets"), ("GET", "/api/graph"),
+                ("POST", "/api/agents/adk/presets/eu_disclaimer_2026/execute"),
+                ("POST", "/api/analytics/ask"), ("POST", "/api/system/tamper"),
+            )
+            path = request.url.path
+            dynamic = (
+                (request.method == "POST" and path.startswith("/api/changes/") and path.endswith(("/estimate", "/approve", "/build")))
+                or (request.method == "GET" and path.startswith("/api/releases/") and (path.endswith("/verify") or "/artifacts/" in path))
+            )
+            if (request.method, path) not in allowed and not dynamic:
+                return JSONResponse(status_code=403, content={"code": "JUDGE_ACTION_BLOCKED", "message": "Not available in the public judge demo."})
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+        return response
 
     @app.exception_handler(ConformError)
     async def conform_error_handler(_: Request, exc: ConformError) -> JSONResponse:
@@ -149,6 +201,16 @@ def create_app() -> FastAPI:
     def verify(release_id: str, coord: Coordinator = Depends(get_coordinator)):
         return coord.verify(release_id).model_dump(mode="json")
 
+    @app.get("/api/releases/{release_id}/artifacts/{node_id}")
+    def artifact(release_id: str, node_id: str, coord: Coordinator = Depends(get_coordinator)):
+        release = next((r for r in coord.releases if r.release_id == release_id), None)
+        if release is None:
+            raise ConformError("UNKNOWN_RELEASE", "Release not found")
+        item = next((a for a in release.artifacts if a.node_id == node_id), None)
+        if item is None:
+            raise ConformError("UNKNOWN_NODE", "Artifact not in release")
+        return Response(content=coord.store.fetch(item.uri), media_type=item.content_type)
+
     @app.get("/api/releases/{a}/diff/{b}")
     def diff_releases(a: str, b: str, coord: Coordinator = Depends(get_coordinator)):
         return coord.diff_releases(a, b).model_dump(mode="json")
@@ -167,7 +229,11 @@ def create_app() -> FastAPI:
 
     @app.post("/api/agents/adk/execute")
     def adk_execute(req: AdkExecuteRequest, coord: Coordinator = Depends(get_coordinator)):
-        return coord.execute_adk_goal(req.goal, auto_approve=req.auto_approve).model_dump(mode="json")
+        return coord.execute_adk_goal(req.goal, auto_approve=False).model_dump(mode="json")
+
+    @app.post("/api/agents/adk/presets/{preset_id}/execute")
+    def adk_execute_preset(preset_id: str, coord: Coordinator = Depends(get_coordinator)):
+        return coord.execute_adk_preset(preset_id).model_dump(mode="json")
 
     @app.post("/api/agents/adk/resume")
     def adk_resume(req: AdkResumeRequest, coord: Coordinator = Depends(get_coordinator)):

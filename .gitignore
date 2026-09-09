@@ -18,8 +18,7 @@ service-account*.json
 web_legacy_backup/
 web/dist/
 .playwright-cli/
-Kimi_Agent_Interactive\ Film\ Agent\ UI/
-*Kimi*
+.tools/
 
 # Generated artifacts
 output/

@@ -16,8 +16,9 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from google.adk import Agent, Runner
+from google.adk.models import Gemini
 from google.adk.sessions import InMemorySessionService
-from google.genai import types
+from google.genai import Client, types
 
 from app.domain.schemas import AdkExecutionResult, ChangeStatus, ConformError
 
@@ -172,10 +173,21 @@ class AdkPipelineOrchestrator:
         self.tool_map = {t.__name__: t for t in self.tools}
 
         # Initialize the official Google ADK Agent
+        agent_model: str | Gemini = self.config.vertex_text_model
+        if self.config.vertex_live:
+            agent_model = Gemini(
+                model=self.config.vertex_text_model,
+                client=Client(
+                    vertexai=True,
+                    project=self.config.google_cloud_project,
+                    location=self.config.google_cloud_region,
+                ),
+            )
+
         self.adk_agent = Agent(
             name="conform_pipeline_compiler",
             description="Autonomous compiler for generative media pipelines using cache determinism and DAG blast radius",
-            model=self.config.vertex_text_model,
+            model=agent_model,
             instruction=ADK_SYSTEM_INSTRUCTION,
             tools=self.tools,
         )
@@ -200,9 +212,11 @@ class AdkPipelineOrchestrator:
         if self.config.vertex_live:
             try:
                 return self._run_live_adk(goal)
-            except Exception:
-                # Fall back gracefully to deterministic multi-step flow — never fake success
-                pass
+            except Exception as exc:
+                raise ConformError(
+                    "ADK_LIVE_FAILED",
+                    "Live Google ADK execution failed; no deterministic success was substituted.",
+                ) from exc
 
         # Deterministic multi-step autonomous execution
         # Step 1: Tool call: interpret_and_estimate
@@ -275,14 +289,25 @@ class AdkPipelineOrchestrator:
             steps: list[dict[str, Any]] = []
             tools_called: list[str] = []
             last_text = ""
+            change_id: str | None = None
+            release_id: str | None = None
 
             # Consume runner events
             for event in self.adk_runner.run(user_id="producer", session_id=session.id, new_message=msg):
-                if hasattr(event, "tool_calls") and event.tool_calls:
-                    for call in event.tool_calls:
-                        tool_name = getattr(call, "name", str(call))
-                        tools_called.append(tool_name)
-                        steps.append({"tool": tool_name, "data": str(call)})
+                for call in event.get_function_calls():
+                    if call.name and call.name not in tools_called:
+                        tools_called.append(call.name)
+                        steps.append({"tool": call.name, "input": call.args or {}})
+                for response in event.get_function_responses():
+                    payload = response.response or {}
+                    if not isinstance(payload, dict):
+                        continue
+                    response_change_id = payload.get("change_id")
+                    response_release_id = payload.get("release_id")
+                    if isinstance(response_change_id, str):
+                        change_id = response_change_id
+                    if isinstance(response_release_id, str):
+                        release_id = response_release_id
                 if hasattr(event, "content") and event.content:
                     for part in event.content.parts:
                         if hasattr(part, "text") and part.text:
@@ -294,6 +319,8 @@ class AdkPipelineOrchestrator:
                 tools_called=tools_called,
                 final_answer=last_text or "ADK agent completed workflow steps.",
                 mode="google_adk_live",
+                change_id=change_id,
+                release_id=release_id,
             )
 
         return asyncio.run(_run())

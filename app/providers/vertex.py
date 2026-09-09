@@ -9,6 +9,7 @@ faked. Model IDs come from Config, never hardcoded here.
 
 from __future__ import annotations
 
+import json
 import time
 from decimal import Decimal
 from uuid import uuid4
@@ -70,7 +71,11 @@ class VertexTextProvider(_VertexBase):
         super().__init__(config, "text", model_attr, Decimal("0.001"))
 
     def generate(self, node: Node, parent_artifacts: dict[str, bytes]) -> tuple[bytes, str, ProviderCallRecord]:
-        prompt = str(node.inputs.get("prompt", ""))
+        prompt = (
+            "Produce the requested campaign content as JSON with headline and disclaimer fields. "
+            "Follow the locale and project rules. Inputs: " + json.dumps(node.inputs, ensure_ascii=False)
+            + " Recipe: " + json.dumps(node.recipe, ensure_ascii=False)
+        )
 
         def fn(client, model) -> bytes:
             resp = client.models.generate_content(model=model, contents=prompt)
@@ -109,10 +114,18 @@ class VertexVideoProvider(_VertexBase):
         seconds = float(node.recipe.get("duration_seconds", 6.0))
 
         def fn(client, model) -> bytes:
-            op = client.models.generate_videos(model=model, prompt=prompt)
+            op = client.models.generate_videos(model=model, prompt=prompt, config={
+                "duration_seconds": int(seconds), "number_of_videos": 1,
+                "aspect_ratio": "9:16", "generate_audio": False,
+            })
+            deadline = time.monotonic() + 240
             while not op.done:
+                if time.monotonic() > deadline:
+                    raise TimeoutError("Video generation did not complete within 240 seconds")
                 time.sleep(5)
                 op = client.operations.get(op)
+            if op.error:
+                raise RuntimeError(str(op.error))
             video = op.response.generated_videos[0].video
             return video.video_bytes or client.files.download(file=video.uri)
 

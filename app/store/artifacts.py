@@ -55,30 +55,49 @@ class LocalArtifactStore:
 class GCSArtifactStore:
     mode = "gcs"
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, namespace: str):
         try:
             from google.cloud import storage
         except ImportError as exc:
             raise RuntimeError("google-cloud-storage not installed") from exc
         self._bucket = storage.Client(project=config.google_cloud_project).bucket(config.artifact_bucket)
+        self._prefix = f"artifacts/{namespace}"
+        self._cache: dict[str, bytes] = {}
+
+    def warm_cache(self) -> None:
+        """Load durable demo objects into this instance; verification still downloads fresh bytes."""
+        from concurrent.futures import ThreadPoolExecutor
+        blobs = list(self._bucket.list_blobs(prefix=f"{self._prefix}/"))
+        def load(blob):
+            return blob.name.rsplit("/", 1)[-1], blob.download_as_bytes()
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            self._cache.update(pool.map(load, blobs))
+
+    def fetch_cached(self, uri: str) -> bytes:
+        fingerprint = uri.rsplit("/", 1)[-1]
+        if fingerprint not in self._cache:
+            self._cache[fingerprint] = self.fetch(uri)
+        return self._cache[fingerprint]
 
     def put(self, fingerprint: str, data: bytes, content_type: str) -> str:
-        blob = self._bucket.blob(f"artifacts/{fingerprint}")
+        blob = self._bucket.blob(f"{self._prefix}/{fingerprint}")
         if not blob.exists():
             blob.upload_from_string(data, content_type=content_type)
-        return f"gs://{self._bucket.name}/artifacts/{fingerprint}"
+        return f"gs://{self._bucket.name}/{self._prefix}/{fingerprint}"
 
     def fetch(self, uri: str) -> bytes:
         name = uri.split(f"gs://{self._bucket.name}/", 1)[1]
         return self._bucket.blob(name).download_as_bytes()
 
     def exists(self, fingerprint: str) -> str | None:
-        blob = self._bucket.blob(f"artifacts/{fingerprint}")
-        return f"gs://{self._bucket.name}/artifacts/{fingerprint}" if blob.exists() else None
+        if fingerprint in self._cache:
+            return f"gs://{self._bucket.name}/{self._prefix}/{fingerprint}"
+        blob = self._bucket.blob(f"{self._prefix}/{fingerprint}")
+        return f"gs://{self._bucket.name}/{self._prefix}/{fingerprint}" if blob.exists() else None
 
     def tamper(self, uri_or_fp: str) -> bool:
-        fp = uri_or_fp.split("artifacts/")[-1]
-        blob = self._bucket.blob(f"artifacts/{fp}")
+        fp = uri_or_fp.rsplit("/", 1)[-1]
+        blob = self._bucket.blob(f"{self._prefix}/{fp}")
         if not blob.exists():
             return False
         data = bytearray(blob.download_as_bytes())
@@ -91,6 +110,8 @@ class GCSArtifactStore:
 
 
 def build_store(config: Config):
+    namespace = "vertex" if config.vertex_live else "fallback"
     if config.gcs_live:
-        return GCSArtifactStore(config)
-    return LocalArtifactStore()
+        return GCSArtifactStore(config, namespace)
+    root = Path(config.artifact_dir) if config.artifact_dir else Path("output/artifacts")
+    return LocalArtifactStore(root / namespace)

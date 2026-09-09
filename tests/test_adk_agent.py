@@ -5,9 +5,10 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.agents.adk_coordinator import AdkPipelineOrchestrator
-from app.agents.coordinator import Coordinator
+from app.agents.coordinator import PRESET_DEFINITIONS, Coordinator, _preset_cache_key
 from app.api.main import create_app
 from app.config import Config
+from app.domain.schemas import CachedAdkPreset
 
 
 def _test_coordinator() -> Coordinator:
@@ -111,7 +112,6 @@ def test_adk_api_endpoint(monkeypatch, tmp_path):
         "/api/agents/adk/execute",
         json={
             "goal": "new rule R-DISC-004 on copy in territories de fr: field disclaimer min_len 40",
-            "auto_approve": False,
         },
     )
     assert resp.status_code == 200
@@ -120,6 +120,18 @@ def test_adk_api_endpoint(monkeypatch, tmp_path):
     assert data["tools_called"] == ["interpret_and_estimate"]
     assert "Approval Gate" in data["final_answer"]
     change_id = data["change_id"]
+
+    preset_resp = client.post("/api/agents/adk/presets/eu_disclaimer_2026/execute")
+    assert preset_resp.status_code == 200
+    preset_data = preset_resp.json()
+    assert preset_data["tools_called"] == ["interpret_and_estimate"]
+    assert preset_data["change_id"] is not None
+    preset_change = client.get(f"/api/changes/{preset_data['change_id']}").json()
+    assert preset_change["preset_id"] == "eu_disclaimer_2026"
+
+    missing_preset = client.post("/api/agents/adk/presets/missing/execute")
+    assert missing_preset.status_code == 404
+    assert missing_preset.json()["code"] == "UNKNOWN_PRESET"
 
     # Invariant: Resuming before human approval MUST fail with 409 NOT_APPROVED
     fail_resume = client.post("/api/agents/adk/resume", json={"change_id": change_id})
@@ -170,3 +182,36 @@ def test_preset_api_endpoints(monkeypatch, tmp_path):
     # 4. Unknown preset returns 404
     bad_resp = client.post("/api/presets/non_existent/changes")
     assert bad_resp.status_code == 404
+
+
+def test_preset_replays_only_stored_live_interpretation(tmp_path):
+    cfg = Config(
+        google_cloud_project="",
+        clickhouse_host="",
+        artifact_bucket="",
+        artifact_dir=str(tmp_path / "artifacts"),
+        events_db=str(tmp_path / "events.db"),
+    )
+    coord = Coordinator(cfg)
+    preset_id = "eu_disclaimer_2026"
+    raw_text = PRESET_DEFINITIONS[preset_id]["raw_text"]
+    source_change = coord.submit_preset(preset_id)
+    source_change.intent.interpretation_mode = "gemini"
+    cache_key = _preset_cache_key(preset_id, raw_text, cfg.vertex_text_model)
+    snapshot = CachedAdkPreset(
+        preset_id=preset_id,
+        cache_key=cache_key,
+        model_id=cfg.vertex_text_model,
+        source_mode="google_adk_live",
+        intent=source_change.intent,
+    )
+    coord.store.put(cache_key, snapshot.model_dump_json().encode("utf-8"), "application/json")
+
+    result = coord.execute_adk_preset(preset_id)
+
+    assert result.mode == "google_adk_cached_live_result"
+    assert result.tools_called == []
+    assert result.change_id in coord.changes
+    assert result.change_id in coord.estimates
+    assert coord.changes[result.change_id].intent.interpretation_mode == "gemini"
+    assert any(entry["event"] == "adk_preset_cache_hit" for entry in coord.audit.entries)

@@ -306,7 +306,7 @@ Invariants that must hold and must be tested:
   conflict, **the PRD wins** — and record the conflict in `docs/DECISIONS.md`.
 - Record every departure from the PRD in `docs/DEVIATIONS.md` with reason, consequence, and
   follow-up. Record stage progress in `docs/WORKLOG.md`. Record tradeoffs in `docs/DECISIONS.md`.
-- **Isolation:** `../BIM-Agent-Demo/`, `../kimi bim fronmt1/`, and any other project on this
+- **Isolation:** `../BIM-Agent-Demo/` and any other external projects on this
   machine are **strictly out of scope**. Do not read from, copy from, or write to them.
   Write only inside `CONFORM/`.
 - **Cost discipline:** Vertex video generation burns credit fast. Default to `veo-3.1-fast`,

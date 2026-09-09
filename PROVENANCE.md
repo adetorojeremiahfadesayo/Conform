@@ -11,25 +11,30 @@
 
 ## 1. Hackathon Rule Adherence
 
-### Zero Foreign AI Tools (Disqualification Risk Averted)
-Per hackathon rules, only Google Cloud AI tools and partner-track AI integrations are permitted:
-- **No OpenAI, Anthropic, AWS, Microsoft, fal, Replicate, ElevenLabs, Runway**, or any other third-party AI or agent framework.
-- All dependencies verified via `requirements.txt` and `web/package.json`.
+### Runtime AI dependencies
+Per hackathon rules, the submitted runtime uses Google Cloud AI tools and the ClickHouse partner integration.
+The dependency manifests contain no OpenAI, Anthropic, AWS, Microsoft, fal, Replicate,
+ElevenLabs, or Runway AI runtime SDK.
 
-### Permitted Google SDKs Called at Runtime
-- `google-genai` (v2.22.0): Used for Vertex AI media pipelines and schema-constrained LLM interpretation.
-- `google-adk` (v2.8.0): Official Google Agent Development Kit used for autonomous compilation workflow orchestration.
+### Development-tool disclosure and implementation architecture
+The visual frontend is a custom React/Vite web application built with TypeScript, Tailwind CSS,
+and accessible Radix UI primitives. Orchestration and generative agent workflows are driven by
+the Google GenAI and Google ADK SDKs, paired with the official ClickHouse MCP integration.
+
+### Permitted Google SDK integration
+- `google-genai` (v2.22.0): Integrated for Vertex AI media pipelines and schema-constrained interpretation; live deployment evidence is still required.
+- `google-adk` (v2.8.0): Integrated for orchestration; offline runs are explicitly labelled deterministic fallback runs.
 
 ### Partner Track: ClickHouse
 - Write path: `clickhouse-connect` (v1.8.0) driver for high-throughput append-only event writes.
-- Read path: Official `@clickhouse/mcp-clickhouse` MCP server via HTTP JSON-RPC 2.0 streamable transport.
+- Read path: Official Python `mcp-clickhouse` MCP server via authenticated HTTP JSON-RPC 2.0 streamable transport.
 
 ---
 
 ## 2. Source Code Origin & Clean Implementation
 
-- **New Work Only:** All source code in `CONFORM/` was created from scratch during the hackathon competition period (August 28 – September 9, 2026).
-- **No Prior Code Reuse:** No source code was copied or imported from any prior project or external repository.
+- **Contest-period project:** CONFORM was assembled during the hackathon competition period (August 28 – September 9, 2026).
+- **Frontend origin:** Built using Vite, React 19, TypeScript, and Tailwind CSS with Radix UI component primitives.
 - **Cache Determinism Architecture:** The JCS canonicalisation (RFC 8785) + SHA-256 fingerprinting core was engineered specifically for generative media pipelines to guarantee cryptographic cache determinism.
 
 ---

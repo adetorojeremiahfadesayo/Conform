@@ -56,6 +56,9 @@ if ($env:CLICKHOUSE_PORT) { $EnvVarsList += "CLICKHOUSE_PORT=$($env:CLICKHOUSE_P
 if ($env:CLICKHOUSE_USER) { $EnvVarsList += "CLICKHOUSE_USER=$($env:CLICKHOUSE_USER)" }
 if ($env:CLICKHOUSE_PASSWORD) { $EnvVarsList += "CLICKHOUSE_PASSWORD=$($env:CLICKHOUSE_PASSWORD)" }
 if ($env:CLICKHOUSE_DATABASE) { $EnvVarsList += "CLICKHOUSE_DATABASE=$($env:CLICKHOUSE_DATABASE)" }
+if ($env:CLICKHOUSE_MCP_URL) { $EnvVarsList += "CLICKHOUSE_MCP_URL=$($env:CLICKHOUSE_MCP_URL)" }
+if ($env:CLICKHOUSE_MCP_AUTH_TOKEN) { $EnvVarsList += "CLICKHOUSE_MCP_AUTH_TOKEN=$($env:CLICKHOUSE_MCP_AUTH_TOKEN)" }
+if ($env:ARTIFACT_BUCKET) { $EnvVarsList += "ARTIFACT_BUCKET=$($env:ARTIFACT_BUCKET)" }
 $EnvVarsString = $EnvVarsList -join ","
 
 # 2. Deploy to Cloud Run

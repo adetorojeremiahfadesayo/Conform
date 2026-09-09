@@ -10,6 +10,7 @@ export default function StageBrief({
   setScenario,
   onScan,
   isSubmitting = false,
+  judgeMode = false,
 }: {
   campaign: string | null;
   setCampaign: (id: string) => void;
@@ -17,6 +18,7 @@ export default function StageBrief({
   setScenario: (s: Scenario | null) => void;
   onScan: (instruction: string) => void;
   isSubmitting?: boolean;
+  judgeMode?: boolean;
 }) {
   const [custom, setCustom] = useState("");
   const ready = campaign !== null && (scenario !== null || custom.trim().length > 4);
@@ -32,7 +34,8 @@ export default function StageBrief({
             return (
               <button
                 key={c.id}
-                onClick={() => setCampaign(c.id)}
+                onClick={() => !judgeMode && setCampaign(c.id)}
+                disabled={judgeMode && c.id !== "aurora"}
                 className="card-hover text-left rounded-2xl p-5 border transition-all"
                 style={{
                   background: CARD_TINTS[i],
@@ -65,7 +68,7 @@ export default function StageBrief({
       <section>
         <SectionHead n="2" title="What changed?" sub="Pick a production note, or write your own" />
         <div className="grid md:grid-cols-3 gap-4">
-          {SCENARIOS.map((s) => {
+          {SCENARIOS.filter((s) => !judgeMode || s.id === "eu-reg").map((s) => {
             const sel = scenario?.id === s.id;
             return (
               <button
@@ -113,6 +116,7 @@ export default function StageBrief({
           </div>
           <textarea
             value={scenario ? scenario.instruction : custom}
+            readOnly={judgeMode}
             onChange={(e) => {
               setCustom(e.target.value);
               if (scenario) setScenario(null);
@@ -124,6 +128,9 @@ export default function StageBrief({
             onFocus={(e) => (e.currentTarget.style.borderColor = "var(--charcoal)")}
             onBlur={(e) => (e.currentTarget.style.borderColor = "var(--hairline)")}
           />
+          {judgeMode && <p className="text-[12px] mt-2" style={{ color: "var(--ink-soft)" }}>
+            Public Judge Mode uses this prepared cached scenario. Custom changes are intentionally unavailable.
+          </p>}
         </div>
       </section>
 

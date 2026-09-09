@@ -109,9 +109,9 @@ export const TERRITORIES: { cc: string; name: string; lang: string }[] = [
 ];
 
 export const CAMPAIGNS = [
-  { id: "aurora", title: "Aurora EV — Global Launch", slate: "A-17", assets: 252 },
-  { id: "lumen", title: "Lumen Watches — Holiday Film", slate: "L-04", assets: 188 },
-  { id: "terra", title: "Terra Cola — Summer Spot", slate: "T-22", assets: 214 },
+  { id: "aurora", title: "Aurora Sneaker Launch", slate: "A-17", assets: 84 },
+  { id: "lumen", title: "Lumen Bank Rebrand", slate: "L-04", assets: 84 },
+  { id: "terra", title: "Northwind Travel Winter", slate: "T-22", assets: 84 },
 ];
 
 // ── build the DAG: 8 master nodes + per-territory copy/package pairs ──
@@ -160,7 +160,7 @@ export const SCENARIOS: Scenario[] = [
     title: "EU Regulation Change",
     short: "New disclaimer rules for DE / FR markets",
     instruction:
-      "Apply directive R-DISC-004: extend the on-screen legal disclaimer to 6 seconds for all German- and French-language deliverables.",
+      "New project rule R-DISC-004: require at least 40 characters in the disclaimer for German and French copy across the slate.",
     regulation: "R-DISC-004",
     dirtyIds: () =>
       EU_LANG_TERRITORIES.flatMap((cc) => [`copy_${cc}`, `pkg_${cc}`]),

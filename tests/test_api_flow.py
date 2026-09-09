@@ -24,7 +24,7 @@ def client(tmp_path, monkeypatch):
 def test_system_status_truthful_labels(client):
     status = client.get("/api/system/status").json()
     assert status["vertex"] == "fallback_stub"
-    assert status["clickhouse_read_mcp"] in ("fallback_direct", "live_mcp")
+    assert status["clickhouse_read_mcp"] in ("fallback_direct", "configured_unverified")
     assert status["nodes"] == 252  # 3 campaigns x (4 master + 40 copy + 40 package)
 
 

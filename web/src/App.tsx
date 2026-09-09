@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import type { BuildResult, Estimate, GraphView, SystemStatus } from "./types";
 import Stepper from "./components/Stepper";
@@ -14,7 +14,6 @@ import StageRelease from "./stages/StageRelease";
 import {
   buildSlate,
   CAMPAIGNS,
-  dirtyAssets,
   SCENARIOS,
   type Scenario,
 } from "./data/slate";
@@ -39,6 +38,7 @@ export default function App() {
   const [adkOpen, setAdkOpen] = useState(false);
   const [faultMode, setFaultMode] = useState<string>("off");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const judgeMode = systemStatus?.judge_mode === "locked_cached_demo";
 
   // Load system status on mount
   useEffect(() => {
@@ -60,17 +60,28 @@ export default function App() {
   };
 
   const dirtyCount = useMemo(() => {
-    if (estimate && estimate.dirty_node_ids.length > 0) {
-      return estimate.dirty_node_ids.length;
-    }
-    return stage >= 2 ? dirtyAssets(effectiveScenario, slate).length : 0;
-  }, [stage, estimate, effectiveScenario, slate]);
+    return estimate?.dirty_node_ids.length ?? 0;
+  }, [estimate]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [stage]);
 
   const go = (n: number) => {
     setErrorMessage(null);
     setStage(n);
     setMaxUnlocked((m) => Math.max(m, n));
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   };
+
+  const handleEstimated = useCallback((est: Estimate, graph: GraphView) => {
+    setEstimate(est);
+    setGraphView(graph);
+  }, []);
 
   const reset = () => {
     setStage(1);
@@ -82,24 +93,37 @@ export default function App() {
     setEstimate(null);
     setGraphView(null);
     setBuildResult(null);
+    setAdkOpen(false);
     setErrorMessage(null);
   };
 
   const handleScan = async (instructionText: string) => {
     setIsSubmitting(true);
     setErrorMessage(null);
+    setChangeId(null);
+    setEstimate(null);
+    setGraphView(null);
+    setBuildResult(null);
+    setApproved(false);
+    setAdkOpen(false);
+    go(2);
     try {
-      let ch;
-      if (scenario?.id === "eu_disclaimer") {
-        ch = await api.submitPreset("eu_disclaimer_2026");
-      } else {
-        ch = await api.submitChange(instructionText);
+      const presetIds: Record<string, string> = {
+        "eu-reg": "eu_disclaimer_2026",
+        reshoot: "reshoot_hero_clip",
+        japan: "japan_retargeting",
+      };
+      const presetId = scenario ? presetIds[scenario.id] : undefined;
+      const result = presetId
+        ? await api.adkExecutePreset(presetId)
+        : await api.adkExecute(instructionText);
+      if (!result.change_id) {
+        throw new Error("Google ADK returned no change identifier");
       }
-      setChangeId(ch.change_id);
-      go(2);
+      setChangeId(result.change_id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setErrorMessage(`Unable to submit change: ${msg}. Check backend connection.`);
+      setErrorMessage(`ADK scan failed: ${msg}. No estimate or approval was invented.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -109,9 +133,10 @@ export default function App() {
     setIsApproving(true);
     setErrorMessage(null);
     try {
-      if (changeId) {
-        await api.approve(changeId, "producer (simulated)");
+      if (!changeId || !estimate) {
+        throw new Error("No backend estimate is available for approval");
       }
+      await api.approve(changeId, "producer (simulated)");
       setApproved(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -159,39 +184,6 @@ export default function App() {
             COMPILER FOR GENERATIVE FILM SLATES
           </span>
 
-          {/* System status chips */}
-          <div className="hidden sm:flex items-center gap-1.5 font-mono2 text-[10px]">
-            <span
-              className="pill"
-              style={{
-                background: systemStatus?.vertex?.startsWith("live") ? "var(--mint)" : "var(--paper-warm)",
-                color: systemStatus?.vertex?.startsWith("live") ? "var(--mint-deep)" : "var(--ink-soft)",
-              }}
-            >
-              Vertex: {systemStatus?.vertex ?? "mock"}
-            </span>
-            <span
-              className="pill"
-              style={{
-                background: systemStatus?.writer?.startsWith("live") ? "var(--mint)" : "var(--paper-warm)",
-                color: systemStatus?.writer?.startsWith("live") ? "var(--mint-deep)" : "var(--ink-soft)",
-              }}
-            >
-              ClickHouse: {systemStatus?.writer ?? "sqlite"}
-            </span>
-            <span
-              className="pill cursor-pointer"
-              title="Click to toggle transient retry fault injection"
-              onClick={toggleFault}
-              style={{
-                background: faultMode !== "off" ? "var(--coral-soft)" : "var(--paper-warm)",
-                color: faultMode !== "off" ? "var(--coral)" : "var(--ink-soft)",
-              }}
-            >
-              Fault: {faultMode}
-            </span>
-          </div>
-
           {activeCampaign && (
             <span className="pill hidden md:inline-flex" style={{ background: "var(--beige-soft)", color: "#7a6650" }}>
               🎬 {activeCampaign.title}
@@ -199,15 +191,15 @@ export default function App() {
           )}
 
           <div className="ml-auto flex items-center gap-2">
-            <button
+            {!judgeMode && <button
               className="pill font-semibold text-[12px] flex items-center gap-1.5 transition-all hover:opacity-90"
               style={{ background: "var(--charcoal)", color: "#fff" }}
               onClick={() => setAdkOpen(true)}
-              title="Google ADK Autonomous Agent Orchestrator"
+              title="Open the optional Google ADK execution trace"
             >
               <span>🤖</span>
-              <span className="hidden sm:inline">ADK Agent</span>
-            </button>
+              <span className="hidden sm:inline">Agent trace</span>
+            </button>}
             <button
               className="pill font-semibold text-[12px] flex items-center gap-1.5"
               style={{ background: "var(--paper-warm)", color: "var(--charcoal)" }}
@@ -251,25 +243,21 @@ export default function App() {
             setScenario={setScenario}
             isSubmitting={isSubmitting}
             onScan={handleScan}
+            judgeMode={judgeMode}
           />
         )}
 
         {stage === 2 && (
           <StageScan
-            scenario={effectiveScenario}
-            slate={slate}
             changeId={changeId}
-            onEstimated={(est, g) => {
-              setEstimate(est);
-              setGraphView(g);
-            }}
+            submissionPending={isSubmitting}
+            onEstimated={handleEstimated}
             onDone={() => go(3)}
           />
         )}
 
         {stage === 3 && (
           <StageGraph
-            scenario={effectiveScenario}
             slate={slate}
             estimate={estimate}
             graphView={graphView}
@@ -295,6 +283,7 @@ export default function App() {
             scenario={effectiveScenario}
             slate={slate}
             changeId={changeId}
+            estimate={estimate}
             buildResult={buildResult}
             onBuildCompleted={setBuildResult}
             onDone={() => go(6)}
@@ -306,17 +295,14 @@ export default function App() {
             scenario={effectiveScenario}
             dirtyCount={dirtyCount}
             buildResult={buildResult}
+            systemStatus={systemStatus}
             onOpenAsk={() => setAskOpen(true)}
           />
         )}
-
-        <footer className="pt-6 pb-10 text-center text-[12px]" style={{ color: "var(--ink-soft)" }}>
-          CONFORM · surgical rebuilds for generative film slates — live API attached · actor roles simulated
-        </footer>
       </main>
 
       {/* ── Ask the Slate Modal ── */}
-      <AskModal isOpen={askOpen} onClose={() => setAskOpen(false)} />
+      <AskModal isOpen={askOpen} onClose={() => setAskOpen(false)} judgeMode={judgeMode} />
 
       {/* ── Google ADK Agent Modal ── */}
       <AdkModal

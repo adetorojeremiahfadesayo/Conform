@@ -14,7 +14,7 @@ from app.providers.package import PackageProvider
 
 
 def build_providers(config: Config) -> dict:
-    providers: dict[str, object] = {"package": PackageProvider()}
+    providers: dict[str, object] = {"package": PackageProvider(strict=config.vertex_live)}
     if config.vertex_live:
         from app.providers.vertex import (
             VertexImageProvider,

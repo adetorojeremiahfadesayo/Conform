@@ -111,7 +111,7 @@ export function ChangeView({ onGraphDirty, onBuilt, onEstimate, onViewGraph }: P
 
   const runAdkAgent = () =>
     guard(async () => {
-      const res = await api.adkExecute(text, true);
+      const res = await api.adkExecute(text);
       setAdkResult(res);
       if (res.change_id) {
         setChangeId(res.change_id);

@@ -102,7 +102,7 @@ def build_seed_specs() -> list[NodeSpec]:
                     territory=territory,
                     kind=NodeKind.PACKAGE,
                     inputs={"format": "9x16", "runtime_seconds": 15},
-                    recipe={"encoder": "ffmpeg", "seed": 19},
+                    recipe={"encoder": "ffmpeg", "package_version": 3, "seed": 19},
                     parents=[f"{campaign_id}.clip", f"{campaign_id}.copy.{territory}"],
                 ),
             ]

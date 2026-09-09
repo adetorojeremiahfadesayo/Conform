@@ -10,6 +10,7 @@ export interface SystemStatus {
   reader: string;
   nodes: number;
   fault_injection?: string;
+  judge_mode?: string;
 }
 
 export interface GraphNode {
@@ -80,15 +81,27 @@ export interface NodeRun {
   cost_usd: string;
 }
 
+export interface ProviderCall {
+  run_id: string;
+  model: string;
+  modality: string;
+  cost_usd: string;
+  http_status: number;
+  retryable: boolean;
+}
+
 export interface BuildResult {
   build_id: string;
   change_id: string;
   release: { release_id: string; artifacts: { node_id: string; sha256: string; uri: string }[] } | null;
   runs: NodeRun[];
+  provider_calls: ProviderCall[];
   nodes_rebuilt: number;
   nodes_reused: number;
   total_cost_usd: string;
   retries: number;
+  telemetry_status?: "recorded" | "failed";
+  telemetry_error?: string | null;
 }
 
 export interface VerificationReport {

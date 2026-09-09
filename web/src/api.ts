@@ -84,10 +84,14 @@ export const api = {
       body: JSON.stringify({ mode }),
     }),
   diffReleases: (a: string, b: string) => req<ReleaseDiff>(`/api/releases/${a}/diff/${b}`),
-  adkExecute: (goal: string, autoApprove: boolean = false) =>
+  adkExecute: (goal: string) =>
     req<AdkExecutionResult>("/api/agents/adk/execute", {
       method: "POST",
-      body: JSON.stringify({ goal, auto_approve: autoApprove }),
+      body: JSON.stringify({ goal }),
+    }),
+  adkExecutePreset: (presetId: string) =>
+    req<AdkExecutionResult>(`/api/agents/adk/presets/${presetId}/execute`, {
+      method: "POST",
     }),
   adkResume: (changeId: string) =>
     req<AdkExecutionResult>("/api/agents/adk/resume", {

@@ -20,15 +20,14 @@ export default function StageApprove({
   onReject: () => void;
   onBuild: () => void;
 }) {
-  const cleanCount = 252 - dirtyCount;
+  const cleanCount = estimate?.reused_node_ids.length ?? 0;
   const spendFormatted = estimate?.estimated_cost_usd
     ? `$${Number(estimate.estimated_cost_usd).toFixed(4)}`
-    : scenario.spend;
-  const naiveSpend = 0.0630;
-  const actualSpendNum = estimate?.estimated_cost_usd ? Number(estimate.estimated_cost_usd) : 0.0030;
-  const savedPctFormatted = estimate?.estimated_cost_usd
-    ? `${((Math.max(0, naiveSpend - actualSpendNum) / naiveSpend) * 100).toFixed(1)}%`
-    : scenario.savedPct;
+    : "—";
+  const totalNodes = dirtyCount + cleanCount;
+  const reusePctFormatted = estimate && totalNodes > 0
+    ? `${((cleanCount / totalNodes) * 100).toFixed(1)}%`
+    : "—";
 
   return (
     <div className="stage-enter max-w-3xl mx-auto">
@@ -76,15 +75,13 @@ export default function StageApprove({
               <div className="text-[12px] mt-1" style={{ color: "var(--coral)" }}>{dirtyCount} dirty assets rebuilt</div>
             </div>
             <div className="rounded-2xl p-5" style={{ background: "var(--paper-warm)" }}>
-              <div className="text-[12px] font-semibold" style={{ color: "var(--ink-soft)" }}>Naive regen would cost</div>
-              <div className="font-mono2 font-bold text-3xl mt-1 line-through" style={{ color: "var(--ink-soft)" }}>
-                {scenario.naiveSpend}
-              </div>
-              <div className="text-[12px] mt-1" style={{ color: "var(--ink-soft)" }}>all 252 assets, blindly</div>
+              <div className="text-[12px] font-semibold" style={{ color: "var(--ink-soft)" }}>Graph scope</div>
+              <div className="font-mono2 font-bold text-3xl mt-1" style={{ color: "var(--ink-soft)" }}>{estimate ? totalNodes : "—"}</div>
+              <div className="text-[12px] mt-1" style={{ color: "var(--ink-soft)" }}>backend nodes evaluated</div>
             </div>
             <div className="rounded-2xl p-5" style={{ background: "var(--mint)" }}>
-              <div className="text-[12px] font-semibold" style={{ color: "var(--mint-deep)" }}>Avoided spend</div>
-              <div className="font-mono2 font-bold text-3xl mt-1" style={{ color: "var(--mint-deep)" }}>{savedPctFormatted}</div>
+              <div className="text-[12px] font-semibold" style={{ color: "var(--mint-deep)" }}>Cache reuse</div>
+              <div className="font-mono2 font-bold text-3xl mt-1" style={{ color: "var(--mint-deep)" }}>{reusePctFormatted}</div>
               <div className="text-[12px] mt-1" style={{ color: "var(--mint-deep)" }}>{cleanCount} reused byte-exact · $0.00</div>
             </div>
           </div>
@@ -97,7 +94,7 @@ export default function StageApprove({
           <div className="flex flex-wrap gap-3 mt-6">
             {!approved ? (
               <>
-                <button className="btn-pill btn-mint" onClick={onApprove} disabled={isApproving}>
+                <button className="btn-pill btn-mint" onClick={onApprove} disabled={isApproving || !estimate}>
                   {isApproving ? "Approving…" : `✓ Approve spend (${spendFormatted})`}
                 </button>
                 <button className="btn-ghost" onClick={onReject} disabled={isApproving}>

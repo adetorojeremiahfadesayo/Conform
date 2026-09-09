@@ -18,4 +18,4 @@ COPY --from=web-builder /web/dist ./web/dist
 
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn app.api.main:app --host 0.0.0.0 --port $PORT"]
+CMD ["python", "-m", "app.serve"]

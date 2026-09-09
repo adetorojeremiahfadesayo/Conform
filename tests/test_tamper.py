@@ -35,3 +35,7 @@ def test_tamper_artifact_causes_verification_failure(tmp_path, monkeypatch):
     assert tampered_report.ok is False
     tampered_art = next(a for a in tampered_report.per_artifact if a["node_id"] == target_node)
     assert tampered_art["ok"] is False
+
+    # A visitor's tamper demonstration must not poison the shared generation cache.
+    from app.core.verify import verify_release
+    assert verify_release(release_id, build_res.release.artifacts, coord.store).ok

@@ -20,8 +20,8 @@ from app.store.mcp_client import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _fake_config(url: str = "http://localhost:8383") -> SimpleNamespace:
-    return SimpleNamespace(clickhouse_mcp_url=url)
+def _fake_config(url: str = "http://localhost:8000", token: str = "") -> SimpleNamespace:
+    return SimpleNamespace(clickhouse_mcp_url=url, clickhouse_mcp_auth_token=token)
 
 
 def _jsonrpc_response(rows: list[dict]) -> str:
@@ -154,10 +154,19 @@ class TestMcpClickHouseReader:
         # Verify the JSON-RPC request was well-formed
         call_args = mock_urlopen.call_args
         req = call_args[0][0]
-        assert req.full_url == "http://localhost:8383/mcp"
+        assert req.full_url == "http://localhost:8000/mcp"
         sent = json.loads(req.data.decode())
         assert sent["method"] == "tools/call"
-        assert sent["params"]["name"] == "run_select_query"
+        assert sent["params"]["name"] == "run_query"
+        assert reader.mode == "live_mcp"
+
+    @patch("app.store.mcp_client.urllib.request.urlopen")
+    def test_bearer_token_is_sent(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.return_value = _mock_urlopen(_jsonrpc_response([]))
+        reader = McpClickHouseReader(_fake_config(token="test-token"))
+        reader.run_select_query("SELECT 1 LIMIT 1")
+        req = mock_urlopen.call_args[0][0]
+        assert req.headers["Authorization"] == "Bearer test-token"
 
     @patch("app.store.mcp_client.urllib.request.urlopen")
     def test_params_substituted(self, mock_urlopen: MagicMock) -> None:
@@ -200,8 +209,9 @@ class TestMcpClickHouseReader:
         assert reader.run_select_query("SELECT metric FROM t LIMIT 1") == rows
 
     def test_trailing_slash_stripped(self) -> None:
-        reader = McpClickHouseReader(_fake_config("http://localhost:8383/"))
-        assert reader._url == "http://localhost:8383"
+        reader = McpClickHouseReader(_fake_config("http://localhost:8000/"))
+        assert reader._url == "http://localhost:8000"
 
     def test_mode_label(self) -> None:
-        assert McpClickHouseReader.mode == "live_mcp"
+        reader = McpClickHouseReader(_fake_config())
+        assert reader.mode == "configured_unverified"

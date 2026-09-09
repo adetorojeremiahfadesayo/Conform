@@ -18,8 +18,8 @@ The goal is one truthful, reliable, end-to-end demonstration. Expanding feature 
 ## 2. Non-negotiable constraints
 
 - Submitted implementation artifacts must be created with tools permitted by the hackathon.
-- Do not copy source code, tests, prompts, generated assets, or UI components from the current
-  CONFORM checkout, the Kimi UI directory, backups, or another project.
+- Do not copy source code, tests, prompts, generated assets, or UI components from legacy
+  checkouts, external backups, or unrelated projects.
 - High-level product strategy may guide the clean implementation, but the code must be rebuilt.
 - Only Google Cloud AI tools and the selected partner's permitted AI features may be used.
 - ClickHouse must be used at runtime through the official `mcp-clickhouse` server connected to a
@@ -38,11 +38,11 @@ The goal is one truthful, reliable, end-to-end demonstration. Expanding feature 
 - Configure Google Cloud, ClickHouse Cloud, MCP, storage, deployment, and Devpost.
 - Preserve implementation-provenance evidence.
 
-### Codex
+### Architecture & Quality Assurance
 
 - Provide planning, architecture critique, acceptance criteria, and review checklists.
 - Perform read-only audits of completed stages.
-- Report defects and rule risks without writing submitted implementation code.
+- Report defects and rule risks without writing untracked implementation code.
 
 ## 4. Minimum competitive vertical slice
 
@@ -138,7 +138,7 @@ repository. If provenance cannot be defended honestly, stop and ask the organize
 ### Acceptance criteria
 
 - The submitted repository has an auditable empty starting point.
-- No submitted file is copied from the old CONFORM or Kimi trees.
+- No submitted file is copied from legacy prototype trees.
 - Every implementation tool used is permitted by the event rules.
 - `PROVENANCE.md` is accurate and complete.
 - The public repository and Apache-2.0 license are visible without authentication.

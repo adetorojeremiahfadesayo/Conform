@@ -43,6 +43,7 @@ class Config:
     clickhouse_password: str = field(default_factory=lambda: _get("CLICKHOUSE_PASSWORD"))
     clickhouse_database: str = field(default_factory=lambda: _get("CLICKHOUSE_DATABASE", "default"))
     clickhouse_mcp_url: str = field(default_factory=lambda: _get("CLICKHOUSE_MCP_URL"))
+    clickhouse_mcp_auth_token: str = field(default_factory=lambda: _get("CLICKHOUSE_MCP_AUTH_TOKEN"))
 
     artifact_bucket: str = field(default_factory=lambda: _get("ARTIFACT_BUCKET"))
     artifact_dir: str = field(default_factory=lambda: _get("CONFORM_ARTIFACT_DIR"))
@@ -53,6 +54,7 @@ class Config:
 
     build_budget_usd: str = field(default_factory=lambda: _get("BUILD_BUDGET_USD", "5.00"))
     fault_injection: str = field(default_factory=lambda: _get("FAULT_INJECTION", "off"))
+    judge_mode: bool = field(default_factory=lambda: _get("JUDGE_MODE", "false").lower() == "true")
 
     @property
     def vertex_live(self) -> bool:
@@ -80,11 +82,16 @@ class Config:
     def public_status(self) -> dict[str, str]:
         """Modes only — never values. Safe to return to the browser."""
         return {
-            "vertex": "live" if self.vertex_live else "fallback_stub",
-            "clickhouse_write": "live" if self.clickhouse_live else "fallback_sqlite",
-            "clickhouse_read_mcp": "live" if self.mcp_live else "fallback_direct",
+            "vertex": "disabled_in_judge_mode" if self.judge_mode else (
+                "configured_unverified" if self.vertex_live else "fallback_stub"
+            ),
+            "clickhouse_write": "disabled_in_judge_mode" if self.judge_mode else (
+                "live" if self.clickhouse_live else "fallback_sqlite"
+            ),
+            "clickhouse_read_mcp": "configured_unverified" if self.mcp_live else "fallback_direct",
             "artifact_store": "gcs" if self.gcs_live else "local_filesystem",
             "budget_usd": self.build_budget_usd,
+            "judge_mode": "locked_cached_demo" if self.judge_mode else "off",
         }
 
 
@@ -93,7 +100,7 @@ def load_config() -> Config:
         import dotenv
 
         if "PYTEST_CURRENT_TEST" not in os.environ:
-            dotenv.load_dotenv(override=True)
+            dotenv.load_dotenv(override=False)
     except Exception:
         pass
     return Config()

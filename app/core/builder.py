@@ -122,10 +122,16 @@ def run_build(
 
         # Reuse path: an identical artifact already exists — never regenerate.
         existing_uri = store.exists(node.fingerprint)
-        parent_artifacts = {p: artifact_bytes.get(p, b"") for p in node.parents}
+        parent_artifacts = {}
+        for parent in node.parents:
+            if parent in artifact_bytes:
+                parent_artifacts[parent] = artifact_bytes[parent]
+            else:
+                uri = store.exists(graph.nodes[parent].fingerprint)
+                parent_artifacts[parent] = getattr(store, "fetch_cached", store.fetch)(uri) if uri else b""
 
         if existing_uri is not None:
-            data = store.fetch(existing_uri)
+            data = getattr(store, "fetch_cached", store.fetch)(existing_uri)
             artifact_bytes[node.node_id] = data
             artifacts.append(
                 ArtifactRecord(
@@ -177,6 +183,8 @@ def run_build(
             record.bytes_out = len(data)
             runs.append(record)
             calls.append(call)
+            call.build_id = build_id
+            call.run_id = record.run_id
             total_cost += call.cost_usd
 
             uri = store.put(node.fingerprint, data, content_type)

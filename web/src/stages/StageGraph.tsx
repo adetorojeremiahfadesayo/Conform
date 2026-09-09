@@ -2,22 +2,18 @@ import { useMemo, useState } from "react";
 import type { Estimate, GraphView } from "../types";
 import {
   KIND_META,
-  fingerprint,
   normalizeBackendNodeId,
-  type Scenario,
   type SlateNode,
 } from "../data/slate";
 
 interface Pos { x: number; y: number }
 
 export default function StageGraph({
-  scenario,
   slate,
   estimate,
   graphView,
   onApprove,
 }: {
-  scenario: Scenario;
   slate: SlateNode[];
   estimate?: Estimate | null;
   graphView?: GraphView | null;
@@ -26,23 +22,19 @@ export default function StageGraph({
   const [selected, setSelected] = useState<SlateNode | null>(null);
 
   const dirtySet = useMemo(() => {
-    if (estimate && estimate.dirty_node_ids.length > 0) {
-      return new Set(estimate.dirty_node_ids.map(normalizeBackendNodeId));
-    }
-    return new Set(scenario.dirtyIds(slate));
-  }, [estimate, scenario, slate]);
+    return new Set((estimate?.dirty_node_ids ?? []).map(normalizeBackendNodeId));
+  }, [estimate]);
 
-  const dirtyCount = dirtySet.size;
-  const cleanCount = 252 - dirtyCount;
+  const dirtyCount = estimate?.dirty_node_ids.length ?? 0;
+  const cleanCount = estimate?.reused_node_ids.length ?? 0;
 
   const spendFormatted = estimate?.estimated_cost_usd
     ? `$${Number(estimate.estimated_cost_usd).toFixed(4)}`
-    : scenario.spend;
-  const naiveSpend = 0.0630;
-  const actualSpendNum = estimate?.estimated_cost_usd ? Number(estimate.estimated_cost_usd) : 0.0030;
-  const savedPctFormatted = estimate?.estimated_cost_usd
-    ? `${((Math.max(0, naiveSpend - actualSpendNum) / naiveSpend) * 100).toFixed(1)}%`
-    : scenario.savedPct;
+    : "—";
+  const totalNodes = dirtyCount + cleanCount;
+  const savedPctFormatted = estimate && totalNodes > 0
+    ? `${((cleanCount / totalNodes) * 100).toFixed(1)}%`
+    : "—";
 
   // ── layout: master spine left, territory grid right ──
   const { positions, masterIds, territoryIds } = useMemo(() => {
@@ -98,8 +90,8 @@ export default function StageGraph({
           </div>
         </div>
         <Metric label="Rebuild bill" value={spendFormatted} color="var(--coral)" />
-        <Metric label="Naive regen" value={scenario.naiveSpend} strike />
-        <Metric label="Spend avoided" value={savedPctFormatted} color="var(--mint-deep)" />
+        <Metric label="Graph scope" value={estimate ? String(totalNodes) : "—"} />
+        <Metric label="Cache reuse" value={savedPctFormatted} color="var(--mint-deep)" />
         <div className="ml-auto flex gap-4 text-[12px]" style={{ color: "var(--ink-soft)" }}>
           <span className="flex items-center gap-1.5">
             <span className="dot" style={{ background: "var(--coral)" }} /> dirty — will rebuild
@@ -221,7 +213,7 @@ export default function StageGraph({
               dirty={dirtySet.has(selected.id)}
               reason={
                 estimate?.dirty_nodes.find((d) => normalizeBackendNodeId(d.node_id) === selected.id)?.reason ??
-                scenario.reason
+                "No backend invalidation reason is available."
               }
               nodeById={nodeById}
               graphView={graphView}
@@ -239,7 +231,7 @@ export default function StageGraph({
       </div>
 
       <div className="flex justify-end mt-6">
-        <button className="btn-pill" onClick={onApprove}>
+        <button className="btn-pill" onClick={onApprove} disabled={!estimate}>
           Continue to approval gate →
         </button>
       </div>
@@ -275,8 +267,7 @@ function Inspector({
   graphView?: GraphView | null;
 }) {
   const realFingerprint =
-    graphView?.nodes.find((gn) => normalizeBackendNodeId(gn.node_id) === node.id)?.fingerprint ||
-    fingerprint(node.id);
+    graphView?.nodes.find((gn) => normalizeBackendNodeId(gn.node_id) === node.id)?.fingerprint;
 
   return (
     <div className="rise-in">
@@ -301,7 +292,7 @@ function Inspector({
         <div>
           <div className="font-mono2 text-[10.5px] tracking-widest mb-1" style={{ color: "var(--ink-soft)" }}>SHA-256</div>
           <div className="font-mono2 text-[11px] break-all rounded-lg p-2.5" style={{ background: "var(--paper-warm)" }}>
-            {realFingerprint}
+            {realFingerprint ?? "Unavailable until returned by the backend graph"}
           </div>
         </div>
         <div>

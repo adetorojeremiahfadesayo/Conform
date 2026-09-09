@@ -11,7 +11,7 @@ const SUGGESTIONS = [
   "What did the disclaimer rule change affect?",
 ];
 
-export default function AskModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function AskModal({ isOpen, onClose, judgeMode = false }: { isOpen: boolean; onClose: () => void; judgeMode?: boolean }) {
   const [query, setQuery] = useState(SUGGESTIONS[0]);
   const [customSql, setCustomSql] = useState("");
   const [showSqlEditor, setShowSqlEditor] = useState(false);
@@ -100,7 +100,7 @@ export default function AskModal({ isOpen, onClose }: { isOpen: boolean; onClose
           </div>
 
           {/* Search bar */}
-          <div className="flex gap-2">
+          {!judgeMode && <div className="flex gap-2">
             <input
               type="text"
               value={query}
@@ -117,10 +117,10 @@ export default function AskModal({ isOpen, onClose }: { isOpen: boolean; onClose
             >
               {busy ? "Analyzing…" : "Ask Agent →"}
             </button>
-          </div>
+          </div>}
 
           {/* SQL Editor Toggle */}
-          <div>
+          {!judgeMode && <div>
             <button
               className="text-[12px] font-mono2 font-semibold hover:underline"
               style={{ color: "var(--ink-soft)" }}
@@ -128,9 +128,9 @@ export default function AskModal({ isOpen, onClose }: { isOpen: boolean; onClose
             >
               {showSqlEditor ? "Hide SQL editor ▴" : "Direct SQL mode (power users) ▾"}
             </button>
-          </div>
+          </div>}
 
-          {showSqlEditor && (
+          {!judgeMode && showSqlEditor && (
             <div className="space-y-2">
               <textarea
                 value={customSql}

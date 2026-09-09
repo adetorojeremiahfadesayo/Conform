@@ -1,5 +1,15 @@
 # CONFORM
 
+[Open the hosted demo](https://conform-tiwoc77ijq-ew.a.run.app)
+
+The hosted URL runs in **Judge Mode**: the prepared German/French disclaimer scenario, its live ADK
+interpretation, and its real Google-generated media are cached in a private GCS bucket. The public API
+accepts no custom prompts or SQL, never calls Vertex on a cache miss, and exposes no credentials. Approval,
+incremental reuse, ClickHouse MCP readback, and byte verification remain demonstrable.
+
+For local API plus authenticated official ClickHouse MCP, run `python -m app.serve` after installing
+`requirements.txt`. Cloud Run uses the same entry point; no separate MCP token setup is needed.
+
 **Compile generative media. Don't regenerate it.**
 
 CONFORM is a build compiler for AI-generated advertising campaigns. It models an entire
@@ -63,18 +73,23 @@ By default the app reads ClickHouse directly. To switch the analytics read
 path to the **official mcp-clickhouse MCP server** (required for the
 ClickHouse partner track):
 
-1. **Start the MCP server** (needs Node ≥ 18):
+1. **Install and start the official Python MCP server in HTTP mode**:
 
    ```bash
-   npx @clickhouse/mcp-clickhouse
+   python -m pip install mcp-clickhouse
+   CLICKHOUSE_MCP_SERVER_TRANSPORT=http \
+   CLICKHOUSE_MCP_AUTH_TOKEN="replace-with-a-generated-secret" \
+   python -m mcp_clickhouse.main
    ```
 
-   This launches a Streamable-HTTP MCP endpoint on port 8383.
+   HTTP transport listens on port 8000 by default and requires authentication.
+   Keep `CLICKHOUSE_ALLOW_WRITE_ACCESS` disabled so the MCP path remains read-only.
 
 2. **Set the environment variable** (in `.env` or your shell):
 
    ```bash
-   CLICKHOUSE_MCP_URL=http://localhost:8383
+   CLICKHOUSE_MCP_URL=http://localhost:8000
+   CLICKHOUSE_MCP_AUTH_TOKEN=replace-with-the-same-generated-secret
    ```
 
 3. **Verify the connection** — start the app and hit the status endpoint:
@@ -83,9 +98,10 @@ ClickHouse partner track):
    curl http://localhost:8080/api/system/status
    ```
 
-   Look for `"clickhouse_read_mcp": "live_mcp"` in the response. If you see
-   `"fallback_direct"` instead, the MCP URL is not set or the server is not
-   reachable.
+   The status is `configured_unverified` until a query succeeds. Exercise
+   `POST /api/analytics/ask`, then confirm the reader changes to `live_mcp`.
+   `error` means the configured server or authentication could not complete
+   the MCP query.
 
 ## The demo flow
 

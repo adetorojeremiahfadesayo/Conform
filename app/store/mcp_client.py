@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.error
 import urllib.request
 from typing import Protocol
 
@@ -61,12 +62,13 @@ class DirectReader:
 
 class McpClickHouseReader:
     """Calls the official mcp-clickhouse server over HTTP (streamable transport),
-    tool `run_select_query`. Read-only by server default and by our guard."""
-
-    mode = "live_mcp"
+    tool `run_query`. Read-only by server default and by our guard."""
 
     def __init__(self, config: Config):
         self._url = config.clickhouse_mcp_url.rstrip("/")
+        self._auth_token = config.clickhouse_mcp_auth_token
+        self.mode = "configured_unverified"
+        self._session_id: str | None = None
 
     def run_select_query(self, sql: str, params: dict | None = None) -> list[dict]:
         safe_sql = guard_sql(sql)
@@ -78,20 +80,58 @@ class McpClickHouseReader:
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
-                "params": {"name": "run_select_query", "arguments": {"query": safe_sql}},
+                "params": {"name": "run_query", "arguments": {"query": safe_sql}},
             }
         ).encode()
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        if self._auth_token:
+            headers["Authorization"] = f"Bearer {self._auth_token}"
+        headers["MCP-Protocol-Version"] = "2025-03-26"
+        if self._session_id:
+            headers["Mcp-Session-Id"] = self._session_id
         req = urllib.request.Request(
             f"{self._url}/mcp",
             data=payload,
-            headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+            headers=headers,
         )
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                body = resp.read().decode()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    body = resp.read().decode()
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (400, 404):
+                    raise
+                init = {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+                    "protocolVersion": "2025-03-26", "capabilities": {},
+                    "clientInfo": {"name": "conform", "version": "0.1.0"},
+                }}
+                headers.pop("Mcp-Session-Id", None)
+                with urllib.request.urlopen(urllib.request.Request(
+                    f"{self._url}/mcp", data=json.dumps(init).encode(), headers=headers,
+                ), timeout=30) as resp:
+                    self._session_id = resp.headers.get("Mcp-Session-Id")
+                    resp.read()
+                if self._session_id:
+                    headers["Mcp-Session-Id"] = self._session_id
+                with urllib.request.urlopen(urllib.request.Request(
+                    f"{self._url}/mcp", headers=headers,
+                    data=json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(),
+                ), timeout=30) as resp:
+                    resp.read()
+                with urllib.request.urlopen(urllib.request.Request(
+                    f"{self._url}/mcp", data=payload, headers=headers,
+                ), timeout=30) as resp:
+                    body = resp.read().decode()
         except Exception as exc:
+            self.mode = "error"
             raise ConformError("MCP_UNREACHABLE", f"ClickHouse MCP server unreachable: {exc}") from exc
-        return _parse_mcp_result(body)
+        try:
+            rows = _parse_mcp_result(body)
+        except Exception:
+            self.mode = "error"
+            raise
+        self.mode = "live_mcp"
+        return rows
 
 
 def _quote(value: str) -> str:
@@ -106,6 +146,8 @@ def _parse_mcp_result(body: str) -> list[dict]:
     envelope = json.loads(text)
     if "error" in envelope:
         raise ConformError("MCP_ERROR", str(envelope["error"])[:300])
+    if envelope.get("result", {}).get("isError"):
+        raise ConformError("MCP_ERROR", str(envelope["result"].get("content", []))[:300])
     content = envelope.get("result", {}).get("content", [])
     for item in content:
         if item.get("type") == "text":
@@ -115,6 +157,13 @@ def _parse_mcp_result(body: str) -> list[dict]:
                     return parsed
                 if isinstance(parsed, dict) and "data" in parsed:
                     return parsed["data"]
+                if isinstance(parsed, dict) and "rows" in parsed:
+                    rows = parsed["rows"]
+                    columns = parsed.get("column_names", parsed.get("columns", []))
+                    if rows and isinstance(rows[0], list) and columns:
+                        names = [c["name"] if isinstance(c, dict) else c for c in columns]
+                        return [dict(zip(names, row)) for row in rows]
+                    return rows
             except json.JSONDecodeError:
                 continue
     return []

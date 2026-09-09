@@ -15,6 +15,7 @@ def clean_test_env(monkeypatch):
     monkeypatch.setenv("CLICKHOUSE_HOST", "")
     monkeypatch.setenv("ARTIFACT_BUCKET", "")
     monkeypatch.setenv("CLICKHOUSE_MCP_URL", "")
+    monkeypatch.setenv("JUDGE_MODE", "false")
 
 
 def make_node(

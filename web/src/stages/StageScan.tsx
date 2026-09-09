@@ -1,82 +1,78 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import type { Estimate, GraphView } from "../types";
-import {
-  buildScanLines,
-  dirtyAssets,
-  normalizeBackendNodeId,
-  TOTAL_ASSETS,
-  type Scenario,
-  type SlateNode,
-} from "../data/slate";
+
+const DEMO_STAGE_MS = 4_000;
+
+function waitForRemainingStageTime(startedAt: number): Promise<void> {
+  const remaining = Math.max(0, DEMO_STAGE_MS - (performance.now() - startedAt));
+  return new Promise((resolve) => window.setTimeout(resolve, remaining));
+}
 
 export default function StageScan({
-  scenario,
-  slate,
   changeId,
+  submissionPending,
   onEstimated,
   onDone,
 }: {
-  scenario: Scenario;
-  slate: SlateNode[];
   changeId?: string | null;
+  submissionPending: boolean;
   onEstimated?: (est: Estimate, graph: GraphView) => void;
   onDone: () => void;
 }) {
   const [backendEst, setBackendEst] = useState<Estimate | null>(null);
-  const lines = useMemo(() => buildScanLines(scenario, slate), [scenario, slate]);
-  const dirty = useMemo(() => {
-    if (backendEst && backendEst.dirty_node_ids.length > 0) {
-      const bSet = new Set(backendEst.dirty_node_ids.map(normalizeBackendNodeId));
-      return slate.filter((n) => bSet.has(n.id));
-    }
-    return dirtyAssets(scenario, slate);
-  }, [backendEst, scenario, slate]);
-
-  const [shown, setShown] = useState(0);
-  const [scanned, setScanned] = useState(0);
+  const [requestState, setRequestState] = useState<"loading" | "ready" | "error">("loading");
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const startedAtRef = useRef(performance.now());
+  const traceLines = useMemo(
+    () => backendEst?.dirty_nodes.map((node) => ({
+      path: node.node_id,
+      detail: node.reason,
+    })) ?? [],
+    [backendEst],
+  );
   const logRef = useRef<HTMLDivElement>(null);
 
   // Call real backend estimate if changeId is present
   useEffect(() => {
-    if (!changeId) return;
+    setBackendEst(null);
+    setRequestError(null);
+    setRequestState("loading");
+    if (!changeId) {
+      if (submissionPending) return;
+      setRequestState("error");
+      setRequestError("Google ADK did not produce a backend change. Return to the brief and submit again.");
+      return;
+    }
     let active = true;
-    Promise.all([api.estimate(changeId), api.graph(changeId)])
+    Promise.all([
+      api.estimate(changeId),
+      api.graph(changeId),
+      waitForRemainingStageTime(startedAtRef.current),
+    ])
       .then(([est, g]) => {
         if (!active) return;
         setBackendEst(est);
+        setRequestState("ready");
         onEstimated?.(est, g);
       })
       .catch((err) => {
-        console.warn("Backend estimate warning (using fallback):", err);
+        if (!active) return;
+        setRequestState("error");
+        setRequestError(err instanceof Error ? err.message : String(err));
       });
     return () => {
       active = false;
     };
-  }, [changeId, onEstimated]);
+  }, [changeId, onEstimated, submissionPending]);
 
-  const finished = shown >= lines.length;
-  const dirtyFound = dirty.length;
-
-  useEffect(() => {
-    if (finished) return;
-    const t = setTimeout(() => setShown((v) => v + 1), shown === 0 ? 500 : 340);
-    return () => clearTimeout(t);
-  }, [shown, finished]);
-
-  // fake "files scanned" counter racing to TOTAL
-  useEffect(() => {
-    if (scanned >= TOTAL_ASSETS) return;
-    const t = setTimeout(
-      () => setScanned((v) => Math.min(TOTAL_ASSETS, v + 7 + Math.floor(Math.random() * 11))),
-      70
-    );
-    return () => clearTimeout(t);
-  }, [scanned]);
+  const finished = requestState === "ready" && backendEst !== null;
+  const dirtyFound = backendEst?.dirty_node_ids.length ?? 0;
+  const scanned = backendEst ? backendEst.dirty_node_ids.length + backendEst.reused_node_ids.length : 0;
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [shown]);
+  }, [traceLines]);
 
   return (
     <div className="stage-enter">
@@ -113,22 +109,26 @@ export default function StageScan({
           </div>
 
           <div className="font-display font-bold text-lg mt-4">
-            {finished ? "Scan complete" : "Dependency agent scanning…"}
+            {requestState === "error" ? "Scan failed" : finished ? "Scan complete" : "Dependency agent scanning…"}
           </div>
           <div className="text-[13px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            {finished
+            {requestState === "error"
+              ? "No estimate was produced and the workflow remains blocked."
+              : finished
               ? "The blast radius is mapped. Ready to visualize."
-              : "Walking the slate, hashing every asset…"}
+              : submissionPending
+              ? "Google ADK is interpreting the change in the background…"
+              : "Waiting for the deterministic backend estimate…"}
           </div>
 
           <div className="w-full mt-6 space-y-3">
-            <Stat label="Files scanned" value={`${scanned} / ${TOTAL_ASSETS}`} />
+            <Stat label="Nodes evaluated" value={finished ? String(scanned) : "—"} />
             <Stat
               label="Dirty files found"
               value={String(dirtyFound)}
               accent={dirtyFound > 0 ? "var(--coral)" : undefined}
             />
-            <Stat label="Cache re-usable" value={String(Math.max(0, scanned - dirtyFound))} accent="var(--mint-deep)" />
+            <Stat label="Cache re-usable" value={backendEst ? String(backendEst.reused_node_ids.length) : "—"} accent="var(--mint-deep)" />
           </div>
 
           {!finished && (
@@ -142,7 +142,7 @@ export default function StageScan({
         <div className="surface overflow-hidden flex flex-col">
           <div className="hairline-b px-5 py-3 flex items-center justify-between">
             <span className="font-mono2 text-[11px] font-semibold tracking-widest" style={{ color: "var(--ink-soft)" }}>
-              AGENT TRACE · POST /api/changes/{changeId ?? "change"} → estimate
+              AGENT TRACE · deterministic estimate
             </span>
             <span
               className="pill"
@@ -152,28 +152,38 @@ export default function StageScan({
               }}
             >
               <span className={`dot ${finished ? "" : "dot-pulse"}`} style={{ background: finished ? "var(--mint-deep)" : "var(--amber)", color: "var(--amber)" }} />
-              {finished ? "ESTIMATE READY" : "SCANNING"}
+              {requestState === "error" ? "ERROR" : finished ? "ESTIMATE READY" : "SCANNING"}
             </span>
           </div>
           <div ref={logRef} className="relative p-4 space-y-1.5 overflow-y-auto font-mono2 text-[12.5px]" style={{ maxHeight: 380, minHeight: 380 }}>
-            {lines.slice(0, shown).map((l, i) => (
+            {traceLines.map((l, i) => (
               <div key={i} className="rise-in flex items-center gap-3 rounded-lg px-3 py-2"
-                style={{ background: l.status === "dirty" ? "var(--coral-soft)" : "transparent" }}>
-                <span style={{ color: l.status === "dirty" ? "var(--coral)" : "var(--mint-deep)" }}>
-                  {l.status === "dirty" ? "✗" : "✓"}
+                style={{ background: "var(--coral-soft)" }}>
+                <span style={{ color: "var(--coral)" }}>
+                  ✗
                 </span>
-                <span className="flex-1 truncate" style={{ color: l.status === "dirty" ? "var(--coral)" : "var(--ink)" }}>
+                <span className="flex-1 truncate" style={{ color: "var(--coral)" }}>
                   {l.path}
                 </span>
-                <span className="text-[11px] flex-none" style={{ color: l.status === "dirty" ? "var(--coral)" : "var(--ink-soft)" }}>
+                <span className="text-[11px] flex-none" style={{ color: "var(--coral)" }}>
                   {l.detail}
                 </span>
               </div>
             ))}
+            {requestState === "loading" && (
+              <div className="rounded-xl p-4" style={{ background: "var(--paper-warm)", color: "var(--ink-soft)" }}>
+                Request in progress. No operational result will be displayed until the API succeeds.
+              </div>
+            )}
+            {requestState === "error" && (
+              <div className="rounded-xl p-4" style={{ background: "var(--coral-soft)", color: "var(--coral)" }}>
+                ⚠ {requestError ?? "The backend estimate request failed."}
+              </div>
+            )}
             {finished && (
               <div className="rise-in rounded-xl p-4 mt-3" style={{ background: "var(--coral-soft)", border: "1px solid #f6c3d0" }}>
                 <span className="font-sans font-semibold text-[14px]" style={{ color: "var(--coral)", fontFamily: "Figtree" }}>
-                  ⚑ {dirty.length} dirty assets located — everything else is cache-clean.
+                  ⚑ {dirtyFound} dirty assets located — everything else is cache-clean.
                 </span>
               </div>
             )}

@@ -340,6 +340,8 @@ class BuildResult(BaseModel):
     nodes_reused: int = 0
     total_cost_usd: Decimal = Decimal("0")
     retries: int = 0
+    telemetry_status: Literal["recorded", "failed"] = "recorded"
+    telemetry_error: str | None = None
 
 
 class VerificationReport(BaseModel):
@@ -396,7 +398,6 @@ class FaultInjectionRequest(BaseModel):
 
 class AdkExecuteRequest(BaseModel):
     goal: str
-    auto_approve: bool = False
 
 
 class AdkResumeRequest(BaseModel):
@@ -411,6 +412,18 @@ class AdkExecutionResult(BaseModel):
     mode: str = "google_adk_deterministic"
     change_id: str | None = None
     release_id: str | None = None
+
+
+class CachedAdkPreset(BaseModel):
+    """A replayable interpretation captured only from a successful live ADK run."""
+
+    schema_version: int = 1
+    preset_id: str
+    cache_key: str
+    model_id: str
+    source_mode: Literal["google_adk_live"]
+    intent: ChangeIntent
+    captured_at: datetime = Field(default_factory=_utcnow)
 
 
 # --------------------------------------------------------------------------- #

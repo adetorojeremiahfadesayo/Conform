@@ -28,3 +28,16 @@ Record of design nuances, operational deviations, and intentional departures fro
 - **Departure**: SQLite does not support ClickHouse `SummingMergeTree` materialized views.
 - **Implementation**: Created a standard SQLite view `build_savings_mv` using conditional aggregations (`SUM(CASE WHEN cache_hit = 1 ...)`), providing cross-dialect query compatibility.
 - **Rationale**: Allows identical analyst queries and metrics calculations to execute unchanged across both ClickHouse Cloud and local SQLite development.
+
+---
+
+## DEV-004: Stored Live ADK Preset Interpretations
+
+- **PRD Reference**: PRD human-approval workflow and deterministic boundary.
+- **Departure**: Curated demo presets may reuse a validated interpretation captured from an earlier successful
+  live Google ADK run instead of invoking the model on every presentation run.
+- **Implementation**: The content-addressed store accepts snapshots only when the source execution reports
+  `google_adk_live` and the intent reports `gemini`. Replay creates a new change, recomputes the deterministic
+  estimate, and still stops at approval.
+- **Rationale**: Reduces demo latency and exposure to transient model-service failures without using fabricated
+  results or bypassing any spend, approval, build, or verification invariant.
